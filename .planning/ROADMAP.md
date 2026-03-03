@@ -124,7 +124,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Daemon Foundation | 2/2 | Complete   | 2026-03-03 |
-| 2. Metric Collector | 1/4 | In Progress|  |
+| 2. Metric Collector | 2/4 | In Progress|  |
 | 3. Storage Layer | 0/TBD | Not started | - |
 | 4. Cloud Dashboard and API | 0/TBD | Not started | - |
 | 5. Self-Healing Core | 0/TBD | Not started | - |

@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T07:38:00.000Z"
+last_updated: "2026-03-03T06:04:16.805Z"
 progress:
-  total_phases: 7
+  total_phases: 2
   completed_phases: 1
-  total_plans: 15
-  completed_plans: 3
+  total_plans: 6
+  completed_plans: 4
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** macOS laeuft stabil und performant ohne manuelles Eingreifen — Probleme werden erkannt und automatisch behoben, bevor der User sie bemerkt. Alle Aktionen sind im zentralen Dashboard nachvollziehbar.
-**Current focus:** Phase 2 — metric data contracts defined, ready for collectors
+**Current focus:** Phase 2 — CPUCollector and RAMCollector complete, ready for DiskCollector
 
 ## Current Position
 
 Phase: 2 of 7 (Metric Collector) — IN PROGRESS
-Plan: 1 of 5 in phase 02 complete. Ready for 02-02 (CPUCollector).
-Status: Phase 2 plan 1 complete
-Last activity: 2026-03-03 — 02-01 complete: metric snapshot types, MetricsStore actor, Logger.collector
+Plan: 2 of 5 in phase 02 complete. Ready for 02-03 (DiskCollector).
+Status: Phase 2 plan 2 complete
+Last activity: 2026-03-03 — 02-02 complete: CPUCollector, RAMCollector, DiskCollector Swift 6 fixes
 
-Progress: [███░░░░░░░] 20% (3/15 plans across all phases)
+Progress: [████░░░░░░] 27% (4/15 plans across all phases)
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [███░░░░░░░] 20% (3/15 plans across all phases)
 *Updated after each plan completion*
 | Phase 01-daemon-foundation P02 | 3 | 2 tasks | 2 files |
 | Phase 02-metric-collector P01 | 1 | 2 tasks | 6 files |
+| Phase 02-metric-collector P02 | 3 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,8 @@ Recent decisions affecting current work:
 - [02-01]: SwapSpike detection requires BOTH >50MB delta AND pressureLevel>=2 — prevents Apple Silicon false positives from normal aggressive swap behavior
 - [02-01]: DiskIOCounters kept separate from DiskIODelta — cumulative counters are internal state for delta math; only deltas are published as metrics
 - [02-01]: Model files import Foundation only — keeps snapshot types testable in isolation without macOS-specific framework dependencies
+- [Phase 02-02]: while true + CancellationError pattern for Service loops — Swift 6 rejects mutating captured vars in @Sendable onGracefulShutdown closures; Task.sleep cancellation exits the loop cleanly
+- [Phase 02-02]: sysconf(_SC_PAGESIZE) instead of vm_page_size — vm_page_size is mutable C global, Swift 6 strict concurrency rejects it as shared mutable state
 
 ### Pending Todos
 
@@ -95,5 +98,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 02-01-PLAN.md — metric data contracts and MetricsStore actor
-Resume file: .planning/phases/02-metric-collector/02-02-PLAN.md
+Stopped at: Completed 02-02-PLAN.md — CPUCollector and RAMCollector
+Resume file: .planning/phases/02-metric-collector/02-03-PLAN.md
