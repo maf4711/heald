@@ -13,7 +13,7 @@ Seven phases build heald from the ground up along a strict dependency chain: the
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Daemon Foundation** - LaunchAgent skeleton, install/uninstall, TCC verification, graceful shutdown (completed 2026-03-03)
-- [ ] **Phase 2: Metric Collector** - CPU, RAM, disk, and process data at correct polling intervals
+- [x] **Phase 2: Metric Collector** - CPU, RAM, disk, and process data at correct polling intervals (completed 2026-03-03)
 - [ ] **Phase 3: Storage Layer** - SQLite ring buffer and NDJSON audit log with retention management
 - [ ] **Phase 4: Cloud Dashboard and API** - Next.js on Vercel at heald.meradOS.com, cloud API with auth, multi-machine view, local metric buffer
 - [ ] **Phase 5: Self-Healing Core** - Process safelist, sustained-threshold kill logic, SIGTERM/SIGKILL sequence
@@ -124,7 +124,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Daemon Foundation | 2/2 | Complete   | 2026-03-03 |
-| 2. Metric Collector | 3/4 | In Progress|  |
+| 2. Metric Collector | 4/4 | Complete   | 2026-03-03 |
 | 3. Storage Layer | 0/TBD | Not started | - |
 | 4. Cloud Dashboard and API | 0/TBD | Not started | - |
 | 5. Self-Healing Core | 0/TBD | Not started | - |

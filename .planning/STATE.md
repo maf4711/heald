@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T06:06:50.223Z"
+last_updated: "2026-03-03T06:11:56.891Z"
 progress:
   total_phases: 2
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** macOS laeuft stabil und performant ohne manuelles Eingreifen — Probleme werden erkannt und automatisch behoben, bevor der User sie bemerkt. Alle Aktionen sind im zentralen Dashboard nachvollziehbar.
-**Current focus:** Phase 2 — DiskCollector and ProcessCollector complete, all 4 metric domains collected
+**Current focus:** Phase 2 complete — all 4 collectors wired into HealdService with DebugStatusWriter; ready for Phase 3 (Storage)
 
 ## Current Position
 
-Phase: 2 of 7 (Metric Collector) — IN PROGRESS
-Plan: 3 of 5 in phase 02 complete. Ready for 02-04 (HealdService wiring).
-Status: Phase 2 plan 3 complete
-Last activity: 2026-03-03 — 02-03 complete: DiskCollector and ProcessCollector
+Phase: 2 of 7 (Metric Collector) — COMPLETE
+Plan: 4 of 4 in phase 02 complete. Ready for Phase 3 (Storage).
+Status: Phase 2 plan 4 complete
+Last activity: 2026-03-03 — 02-04 complete: HealdService wiring and DebugStatusWriter
 
-Progress: [████░░░░░░] 27% (4/15 plans across all phases)
+Progress: [█████░░░░░] 33% (5/15 plans across all phases)
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [████░░░░░░] 27% (4/15 plans across all phases)
 | Phase 02-metric-collector P01 | 1 | 2 tasks | 6 files |
 | Phase 02-metric-collector P02 | 3 | 2 tasks | 3 files |
 | Phase 02-metric-collector P03 | 8 | 2 tasks | 2 files |
+| Phase 02-metric-collector P04 | 1 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,9 @@ Recent decisions affecting current work:
 - [Phase 02-03]: Multi-interval polling in a single 5s loop with cycle counter — avoids extra Tasks/Timers; DiskCollector gates sub-collectors on modulo arithmetic
 - [Phase 02-03]: Locale-safe ps parsing: replace comma with period before Double parsing — German locale outputs commas in ps %CPU column (confirmed in research)
 - [Phase 02-03]: while-true + empty onGracefulShutdown is established standard for all collectors — shutdown variable conflicts with Darwin socket function; Task.sleep CancellationError is the shutdown mechanism
+- [Phase 02-04]: Child ServiceGroup has no gracefulShutdownSignals — only top-level ServiceGroup in HealdApp handles SIGTERM/SIGINT; child inherits propagation
+- [Phase 02-04]: DebugStatusWriter uses while-true + Task.sleep CancellationError shutdown pattern (same as collectors — shutdown variable conflicts with Darwin socket function)
+- [Phase 02-04]: Large nested [String: Any] dict literals must be decomposed into named sub-dicts — Swift type-checker times out on deeply nested Any literals in a single expression
 
 ### Pending Todos
 
@@ -102,5 +106,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 02-03-PLAN.md — DiskCollector and ProcessCollector
-Resume file: .planning/phases/02-metric-collector/02-04-PLAN.md
+Stopped at: Completed 02-04-PLAN.md — HealdService wiring and DebugStatusWriter; Phase 2 complete
+Resume file: .planning/phases/03-storage/ (next phase)
