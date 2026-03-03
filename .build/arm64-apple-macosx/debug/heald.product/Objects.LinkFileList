@@ -1,0 +1,223 @@
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/Argument.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/ArgumentDecoder.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/ArgumentDefinition.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/ArgumentDiscussion.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/ArgumentHelp.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/ArgumentSet.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/ArgumentVisibility.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/AsyncParsableCommand.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/BashCompletionsGenerator.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/CodingKeyValidator.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/CollectionExtensions.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/CommandConfiguration.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/CommandGroup.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/CommandParser.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/CompletionKind.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/CompletionsGenerator.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/DumpHelpGenerator.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/EnumerableFlag.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/Errors.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/ExpressibleByArgument.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/FishCompletionsGenerator.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/Flag.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/Foundation.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/HelpCommand.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/HelpGenerator.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/InputKey.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/InputOrigin.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/MessageInfo.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/Mutex.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/Name.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/NameSpecification.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/NonsenseFlagsValidator.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/Option.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/OptionGroup.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/ParentCommand.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/ParsableArguments.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/ParsableArgumentsValidation.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/ParsableCommand.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/Parsed.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/ParsedValues.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/ParserError.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/Platform.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/PositionalArgumentsValidator.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/SequenceExtensions.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/SplitArguments.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/StringExtensions.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/SwiftExtensions.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/Tree.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/UniqueNamesValidator.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/UsageGenerator.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParser.build/ZshCompletionsGenerator.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ArgumentParserToolInfo.build/ToolInfo.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncAdjacentPairsSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncBufferSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncBufferedByteIterator.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncChain2Sequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncChain3Sequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncChannel.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncChunkedByGroupSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncChunkedOnProjectionSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncChunksOfCountOrSignalSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncChunksOfCountSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncCombineLatest2Sequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncCombineLatest3Sequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncCompactedSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncDebounceSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncExclusiveReductionsSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncInclusiveReductionsSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncInterspersedSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncJoinedBySeparatorSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncJoinedSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncMapErrorSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncMerge2Sequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncMerge3Sequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncRemoveDuplicatesSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncShareSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncSyncSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncThrottleSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncThrowingChannel.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncThrowingExclusiveReductionsSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncThrowingInclusiveReductionsSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncTimerSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncZip2Sequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/AsyncZip3Sequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/BoundedBufferStateMachine.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/BoundedBufferStorage.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/ChannelStateMachine.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/ChannelStorage.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/CombineLatestStateMachine.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/CombineLatestStorage.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/DebounceStateMachine.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/DebounceStorage.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/Dictionary.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/Disconnected.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/Locking.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/MergeStateMachine.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/MergeStorage.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/MultiProducerSingleConsumerAsyncChannel+Internal.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/MultiProducerSingleConsumerAsyncChannel.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/RangeReplaceableCollection.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/Rethrow.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/SetAlgebra.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/UnboundedBufferStateMachine.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/UnboundedBufferStorage.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/UnsafeTransfer.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/ZipStateMachine.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/ZipStorage.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/AsyncAlgorithms.build/_TinyArray.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ConcurrencyHelpers.build/Lock.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ConcurrencyHelpers.build/LockedValueBox.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/Deque+Codable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/Deque+Collection.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/Deque+CustomReflectable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/Deque+Descriptions.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/Deque+Equatable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/Deque+ExpressibleByArrayLiteral.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/Deque+Extras.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/Deque+Hashable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/Deque+Testing.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/Deque._Storage.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/Deque._UnsafeHandle.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/Deque.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/_DequeBuffer.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/_DequeBufferHeader.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/_DequeSlot.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/DequeModule.build/_UnsafeWrappedBuffer.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/Debugging.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/Descriptions.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/FixedWidthInteger+roundUpToPowerOfTwo.swift.o
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/Integer rank.swift.o'
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/LifetimeOverride.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/RandomAccessCollection+Offsets.swift.o
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/UInt+first and last set bit.swift.o'
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/UInt+reversed.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/UnsafeBufferPointer+Extras.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/UnsafeMutableBufferPointer+Extras.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/UnsafeMutableRawBufferPointer+Extras.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/UnsafeRawBufferPointer+Extras.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/_SortedCollection.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/_UniqueCollection.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/_UnsafeBitSet+Index.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/_UnsafeBitSet+_Word.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/InternalCollectionsUtilities.build/_UnsafeBitSet.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/Logging.build/Locks.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/Logging.build/LogHandler.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/Logging.build/Logging.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/Logging.build/MetadataProvider.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+Codable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+CustomReflectable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+Deprecations.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+Descriptions.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+Elements.SubSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+Elements.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+Equatable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+ExpressibleByDictionaryLiteral.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+Hashable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+Initializers.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+Invariants.swift.o
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+Partial MutableCollection.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+Partial RangeReplaceableCollection.swift.o'
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+Sendable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+Sequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary+Values.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedDictionary.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Codable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+CustomReflectable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Descriptions.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Diffing.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Equatable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+ExpressibleByArrayLiteral.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Hashable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Initializers.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Insertions.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Invariants.swift.o
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial MutableCollection.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial RangeReplaceableCollection.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra formIntersection.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra formSymmetricDifference.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra formUnion.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra intersection.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra isDisjoint.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra isEqualSet.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra isStrictSubset.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra isStrictSuperset.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra isSubset.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra isSuperset.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra subtract.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra subtracting.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra symmetricDifference.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra union.swift.o'
+'/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Partial SetAlgebra+Basics.swift.o'
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+RandomAccessCollection.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+ReserveCapacity.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Sendable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+SubSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+Testing.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+UnorderedView.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet+UnstableInternals.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/OrderedSet.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/_HashTable+Bucket.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/_HashTable+BucketIterator.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/_HashTable+Constants.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/_HashTable+CustomStringConvertible.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/_HashTable+Testing.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/_HashTable+UnsafeHandle.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/_HashTable.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/_Hashtable+Header.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/OrderedCollections.build/_UnsafeBitset.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ServiceLifecycle.build/AsyncCancelOnGracefulShutdownSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ServiceLifecycle.build/AsyncGracefulShutdownSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ServiceLifecycle.build/CancellationWaiter.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ServiceLifecycle.build/ClosureService.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ServiceLifecycle.build/GracefulShutdown.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ServiceLifecycle.build/Service.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ServiceLifecycle.build/ServiceGroup.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ServiceLifecycle.build/ServiceGroupConfiguration.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/ServiceLifecycle.build/ServiceRunnerError.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/UnixSignals.build/UnixSignal.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/UnixSignals.build/UnixSignalsSequence.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/heald.build/HealdApp.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/heald.build/HealdService.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/heald.build/Logging.swift.o
+/Users/a321/Documents/heald/.build/arm64-apple-macosx/debug/heald.build/main.swift.o

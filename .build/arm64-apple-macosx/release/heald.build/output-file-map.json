@@ -1,0 +1,31 @@
+{
+  "": {
+    "dependencies": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/heald.d",
+    "object": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/heald.o",
+    "swift-dependencies": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/master.swiftdeps"
+  },
+  "/Users/a321/Documents/heald/Sources/heald/HealdApp.swift": {
+    "object": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/HealdApp.swift.o",
+    "swiftmodule": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/HealdApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/HealdApp.swiftdeps",
+    "diagnostics": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/HealdApp.dia"
+  },
+  "/Users/a321/Documents/heald/Sources/heald/HealdService.swift": {
+    "object": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/HealdService.swift.o",
+    "swiftmodule": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/HealdService~partial.swiftmodule",
+    "swift-dependencies": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/HealdService.swiftdeps",
+    "diagnostics": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/HealdService.dia"
+  },
+  "/Users/a321/Documents/heald/Sources/heald/Logging.swift": {
+    "object": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/Logging.swift.o",
+    "swiftmodule": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/Logging~partial.swiftmodule",
+    "swift-dependencies": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/Logging.swiftdeps",
+    "diagnostics": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/Logging.dia"
+  },
+  "/Users/a321/Documents/heald/Sources/heald/main.swift": {
+    "object": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/main.swift.o",
+    "swiftmodule": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/main~partial.swiftmodule",
+    "swift-dependencies": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/main.swiftdeps",
+    "diagnostics": "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/heald.build/main.dia"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "": {
+    "swift-dependencies": "/Users/a321/Documents/heald/.build/index-build/arm64-apple-macosx/debug/UnixSignals.build/master.swiftdeps"
+  },
+  "/Users/a321/Documents/heald/.build/index-build/checkouts/swift-service-lifecycle/Sources/UnixSignals/UnixSignal.swift": {
+    "dependencies": "/Users/a321/Documents/heald/.build/index-build/arm64-apple-macosx/debug/UnixSignals.build/UnixSignal.d",
+    "object": "/Users/a321/Documents/heald/.build/index-build/arm64-apple-macosx/debug/UnixSignals.build/UnixSignal.swift.o",
+    "swiftmodule": "/Users/a321/Documents/heald/.build/index-build/arm64-apple-macosx/debug/UnixSignals.build/UnixSignal~partial.swiftmodule",
+    "swift-dependencies": "/Users/a321/Documents/heald/.build/index-build/arm64-apple-macosx/debug/UnixSignals.build/UnixSignal.swiftdeps",
+    "diagnostics": "/Users/a321/Documents/heald/.build/index-build/arm64-apple-macosx/debug/UnixSignals.build/UnixSignal.dia"
+  },
+  "/Users/a321/Documents/heald/.build/index-build/checkouts/swift-service-lifecycle/Sources/UnixSignals/UnixSignalsSequence.swift": {
+    "dependencies": "/Users/a321/Documents/heald/.build/index-build/arm64-apple-macosx/debug/UnixSignals.build/UnixSignalsSequence.d",
+    "object": "/Users/a321/Documents/heald/.build/index-build/arm64-apple-macosx/debug/UnixSignals.build/UnixSignalsSequence.swift.o",
+    "swiftmodule": "/Users/a321/Documents/heald/.build/index-build/arm64-apple-macosx/debug/UnixSignals.build/UnixSignalsSequence~partial.swiftmodule",
+    "swift-dependencies": "/Users/a321/Documents/heald/.build/index-build/arm64-apple-macosx/debug/UnixSignals.build/UnixSignalsSequence.swiftdeps",
+    "diagnostics": "/Users/a321/Documents/heald/.build/index-build/arm64-apple-macosx/debug/UnixSignals.build/UnixSignalsSequence.dia"
+  }
+}
