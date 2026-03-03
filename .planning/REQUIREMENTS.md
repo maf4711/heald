@@ -15,14 +15,14 @@
 
 ### Monitoring
 
-- [ ] **MON-01**: CPU-Auslastung ueberwachen (gesamt + pro Core, 5s Polling)
-- [ ] **MON-02**: RAM/Memory Pressure ueberwachen (Used, Wired, Compressed, Swap)
-- [ ] **MON-03**: Disk Space pro Volume ueberwachen
-- [ ] **MON-04**: Disk I/O Activity ueberwachen
-- [ ] **MON-05**: Prozessliste mit CPU/RAM pro Prozess erfassen
+- [x] **MON-01**: CPU-Auslastung ueberwachen (gesamt + pro Core, 5s Polling)
+- [x] **MON-02**: RAM/Memory Pressure ueberwachen (Used, Wired, Compressed, Swap)
+- [x] **MON-03**: Disk Space pro Volume ueberwachen
+- [x] **MON-04**: Disk I/O Activity ueberwachen
+- [x] **MON-05**: Prozessliste mit CPU/RAM pro Prozess erfassen
 - [ ] **MON-06**: Top-Ressourcenverbraucher identifizieren und ranken
-- [ ] **MON-07**: Swap-Spikes erkennen und verursachenden Prozess loggen
-- [ ] **MON-08**: S.M.A.R.T. Disk Health ueberwachen
+- [x] **MON-07**: Swap-Spikes erkennen und verursachenden Prozess loggen
+- [x] **MON-08**: S.M.A.R.T. Disk Health ueberwachen
 
 ### Self-Healing
 
@@ -105,14 +105,14 @@
 | DAEM-03 | Phase 1 | Complete |
 | DAEM-04 | Phase 1 | Complete |
 | DAEM-05 | Phase 1 | Complete |
-| MON-01 | Phase 2 | Pending |
-| MON-02 | Phase 2 | Pending |
-| MON-03 | Phase 2 | Pending |
-| MON-04 | Phase 2 | Pending |
-| MON-05 | Phase 2 | Pending |
+| MON-01 | Phase 2 | Complete |
+| MON-02 | Phase 2 | Complete |
+| MON-03 | Phase 2 | Complete |
+| MON-04 | Phase 2 | Complete |
+| MON-05 | Phase 2 | Complete |
 | MON-06 | Phase 2 | Pending |
-| MON-07 | Phase 2 | Pending |
-| MON-08 | Phase 2 | Pending |
+| MON-07 | Phase 2 | Complete |
+| MON-08 | Phase 2 | Complete |
 | LOG-01 | Phase 3 | Pending |
 | LOG-02 | Phase 3 | Pending |
 | LOG-03 | Phase 3 | Pending |

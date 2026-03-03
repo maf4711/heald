@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T04:40:20.844Z"
+last_updated: "2026-03-03T07:38:00.000Z"
 progress:
-  total_phases: 1
+  total_phases: 7
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 15
+  completed_plans: 3
 ---
 
 # Project State
@@ -18,22 +18,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** macOS laeuft stabil und performant ohne manuelles Eingreifen — Probleme werden erkannt und automatisch behoben, bevor der User sie bemerkt. Alle Aktionen sind im zentralen Dashboard nachvollziehbar.
-**Current focus:** Phase 2 — next phase (Phase 1 complete)
+**Current focus:** Phase 2 — metric data contracts defined, ready for collectors
 
 ## Current Position
 
-Phase: 1 of 7 (Daemon Foundation) — COMPLETE
-Plan: 2 of 2 in phase 01 complete. Ready for Phase 2.
-Status: Phase 1 complete
-Last activity: 2026-03-03 — 01-02 complete: install.sh and uninstall.sh for heald lifecycle management
+Phase: 2 of 7 (Metric Collector) — IN PROGRESS
+Plan: 1 of 5 in phase 02 complete. Ready for 02-02 (CPUCollector).
+Status: Phase 2 plan 1 complete
+Last activity: 2026-03-03 — 02-01 complete: metric snapshot types, MetricsStore actor, Logger.collector
 
-Progress: [██░░░░░░░░] 14% (2/14 plans across all phases)
+Progress: [███░░░░░░░] 20% (3/15 plans across all phases)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 2.5 min
+- Total plans completed: 3
+- Average duration: 2 min
 - Total execution time: 0.08 hours
 
 **By Phase:**
@@ -41,13 +41,15 @@ Progress: [██░░░░░░░░] 14% (2/14 plans across all phases)
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-daemon-foundation | 2/2 | 5 min | 2.5 min |
+| 02-metric-collector | 1/5 | 1 min | 1 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2 min), 01-02 (3 min)
+- Last 5 plans: 01-01 (2 min), 01-02 (3 min), 02-01 (1 min)
 - Trend: baseline
 
 *Updated after each plan completion*
 | Phase 01-daemon-foundation P02 | 3 | 2 tasks | 2 files |
+| Phase 02-metric-collector P01 | 1 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -73,6 +75,10 @@ Recent decisions affecting current work:
 - [Phase 01-daemon-foundation]: plutil -lint before launchctl bootstrap surfaces plist XML errors early
 - [Phase 01-daemon-foundation]: bootout-before-bootstrap in install.sh makes re-install idempotent
 - [Phase 01-daemon-foundation]: uninstall.sh does not remove ollama (may be used independently)
+- [02-01]: ProcessEntry.isSystem uses uid < 500 — feeds Phase 5 safelist, system-tagged processes are never killed
+- [02-01]: SwapSpike detection requires BOTH >50MB delta AND pressureLevel>=2 — prevents Apple Silicon false positives from normal aggressive swap behavior
+- [02-01]: DiskIOCounters kept separate from DiskIODelta — cumulative counters are internal state for delta math; only deltas are published as metrics
+- [02-01]: Model files import Foundation only — keeps snapshot types testable in isolation without macOS-specific framework dependencies
 
 ### Pending Todos
 
@@ -89,5 +95,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Phase 2 context gathered — ready for planning
-Resume file: .planning/phases/02-metric-collector/02-CONTEXT.md
+Stopped at: Completed 02-01-PLAN.md — metric data contracts and MetricsStore actor
+Resume file: .planning/phases/02-metric-collector/02-02-PLAN.md
