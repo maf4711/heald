@@ -124,6 +124,20 @@ None - no external service configuration required.
 - SwapSpike detection wired — RAMCollector (plan 02-03) calls detectSwapSpike after each updateRAM call
 - No blockers for 02-02 through 02-05
 
+## Self-Check: PASSED
+
+- FOUND: Sources/heald/Models/CPUSnapshot.swift
+- FOUND: Sources/heald/Models/RAMSnapshot.swift
+- FOUND: Sources/heald/Models/DiskSnapshot.swift
+- FOUND: Sources/heald/Models/ProcessSnapshot.swift
+- FOUND: Sources/heald/MetricsStore.swift
+- FOUND: Sources/heald/Logging.swift
+- FOUND: .planning/phases/02-metric-collector/02-01-SUMMARY.md
+- FOUND commit: 1d6279f (feat: create all metric snapshot model types)
+- FOUND commit: 7c61a51 (feat: create MetricsStore actor and add Logger.collector)
+- FOUND commit: 5d2e6f5 (docs: complete metric-contracts plan)
+- swift build: PASSED (Build complete)
+
 ---
 *Phase: 02-metric-collector*
 *Completed: 2026-03-03*
