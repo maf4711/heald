@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T06:04:16.805Z"
+last_updated: "2026-03-03T06:06:50.223Z"
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -18,14 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** macOS laeuft stabil und performant ohne manuelles Eingreifen — Probleme werden erkannt und automatisch behoben, bevor der User sie bemerkt. Alle Aktionen sind im zentralen Dashboard nachvollziehbar.
-**Current focus:** Phase 2 — CPUCollector and RAMCollector complete, ready for DiskCollector
+**Current focus:** Phase 2 — DiskCollector and ProcessCollector complete, all 4 metric domains collected
 
 ## Current Position
 
 Phase: 2 of 7 (Metric Collector) — IN PROGRESS
-Plan: 2 of 5 in phase 02 complete. Ready for 02-03 (DiskCollector).
-Status: Phase 2 plan 2 complete
-Last activity: 2026-03-03 — 02-02 complete: CPUCollector, RAMCollector, DiskCollector Swift 6 fixes
+Plan: 3 of 5 in phase 02 complete. Ready for 02-04 (HealdService wiring).
+Status: Phase 2 plan 3 complete
+Last activity: 2026-03-03 — 02-03 complete: DiskCollector and ProcessCollector
 
 Progress: [████░░░░░░] 27% (4/15 plans across all phases)
 
@@ -51,6 +51,7 @@ Progress: [████░░░░░░] 27% (4/15 plans across all phases)
 | Phase 01-daemon-foundation P02 | 3 | 2 tasks | 2 files |
 | Phase 02-metric-collector P01 | 1 | 2 tasks | 6 files |
 | Phase 02-metric-collector P02 | 3 | 2 tasks | 3 files |
+| Phase 02-metric-collector P03 | 8 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,9 @@ Recent decisions affecting current work:
 - [02-01]: Model files import Foundation only — keeps snapshot types testable in isolation without macOS-specific framework dependencies
 - [Phase 02-02]: while true + CancellationError pattern for Service loops — Swift 6 rejects mutating captured vars in @Sendable onGracefulShutdown closures; Task.sleep cancellation exits the loop cleanly
 - [Phase 02-02]: sysconf(_SC_PAGESIZE) instead of vm_page_size — vm_page_size is mutable C global, Swift 6 strict concurrency rejects it as shared mutable state
+- [Phase 02-03]: Multi-interval polling in a single 5s loop with cycle counter — avoids extra Tasks/Timers; DiskCollector gates sub-collectors on modulo arithmetic
+- [Phase 02-03]: Locale-safe ps parsing: replace comma with period before Double parsing — German locale outputs commas in ps %CPU column (confirmed in research)
+- [Phase 02-03]: while-true + empty onGracefulShutdown is established standard for all collectors — shutdown variable conflicts with Darwin socket function; Task.sleep CancellationError is the shutdown mechanism
 
 ### Pending Todos
 
@@ -98,5 +102,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 02-02-PLAN.md — CPUCollector and RAMCollector
-Resume file: .planning/phases/02-metric-collector/02-03-PLAN.md
+Stopped at: Completed 02-03-PLAN.md — DiskCollector and ProcessCollector
+Resume file: .planning/phases/02-metric-collector/02-04-PLAN.md

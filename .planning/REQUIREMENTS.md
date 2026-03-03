@@ -20,7 +20,7 @@
 - [x] **MON-03**: Disk Space pro Volume ueberwachen
 - [x] **MON-04**: Disk I/O Activity ueberwachen
 - [x] **MON-05**: Prozessliste mit CPU/RAM pro Prozess erfassen
-- [ ] **MON-06**: Top-Ressourcenverbraucher identifizieren und ranken
+- [x] **MON-06**: Top-Ressourcenverbraucher identifizieren und ranken
 - [x] **MON-07**: Swap-Spikes erkennen und verursachenden Prozess loggen
 - [x] **MON-08**: S.M.A.R.T. Disk Health ueberwachen
 
@@ -110,7 +110,7 @@
 | MON-03 | Phase 2 | Complete |
 | MON-04 | Phase 2 | Complete |
 | MON-05 | Phase 2 | Complete |
-| MON-06 | Phase 2 | Pending |
+| MON-06 | Phase 2 | Complete |
 | MON-07 | Phase 2 | Complete |
 | MON-08 | Phase 2 | Complete |
 | LOG-01 | Phase 3 | Pending |
