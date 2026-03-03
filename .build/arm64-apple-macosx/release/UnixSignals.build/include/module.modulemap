@@ -1,3 +1,0 @@
-module UnixSignals {
-    header "/Users/a321/Documents/heald/.build/arm64-apple-macosx/release/UnixSignals.build/include/UnixSignals-Swift.h"
-}
