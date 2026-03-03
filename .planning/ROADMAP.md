@@ -49,7 +49,13 @@ Plans:
   4. A ranked list of top CPU/RAM consumers is produced from each process snapshot, matching Activity Monitor rankings.
   5. Swap spikes are detected and the responsible process is identified and logged within one polling cycle of the spike occurring.
   6. S.M.A.R.T. disk health status is read and reflects the actual drive health reported by `diskutil info`.
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Metric snapshot models, MetricsStore actor, Logger.collector
+- [ ] 02-02-PLAN.md — CPUCollector (tick-delta) and RAMCollector (host_statistics64 + swap spike)
+- [ ] 02-03-PLAN.md — DiskCollector (space/IO/SMART) and ProcessCollector (ps ranking)
+- [ ] 02-04-PLAN.md — Wire all collectors into HealdService, debug JSON status file
 
 ### Phase 3: Storage Layer
 **Goal**: All metrics and system events are persisted to disk in a queryable form that survives daemon restarts, with automatic retention management preventing unbounded disk growth.
@@ -118,7 +124,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Daemon Foundation | 2/2 | Complete   | 2026-03-03 |
-| 2. Metric Collector | 0/TBD | Not started | - |
+| 2. Metric Collector | 0/4 | Planned | - |
 | 3. Storage Layer | 0/TBD | Not started | - |
 | 4. Cloud Dashboard and API | 0/TBD | Not started | - |
 | 5. Self-Healing Core | 0/TBD | Not started | - |
