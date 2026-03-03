@@ -3,7 +3,7 @@ import ServiceLifecycle
 import OSLog
 
 struct HealdApp: AsyncParsableCommand {
-    static let version = "0.1.0"
+    static let version = "0.2.0"  // Bump from 0.1.0 — Phase 2 adds metric collection
 
     static let configuration = CommandConfiguration(
         commandName: "heald",
@@ -14,7 +14,8 @@ struct HealdApp: AsyncParsableCommand {
     func run() async throws {
         Logger.lifecycle.info("heald \(Self.version) starting")
 
-        let service = HealdService()
+        let store = MetricsStore()
+        let service = HealdService(store: store)
         let serviceGroup = ServiceGroup(
             services: [service],
             gracefulShutdownSignals: [.sigterm, .sigint],
