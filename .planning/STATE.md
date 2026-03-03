@@ -89,5 +89,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 01-02-PLAN.md — install.sh and uninstall.sh for heald lifecycle management. Phase 1 (Daemon Foundation) complete. Ready for Phase 2.
-Resume file: None
+Stopped at: Phase 2 context gathered — ready for planning
+Resume file: .planning/phases/02-metric-collector/02-CONTEXT.md
