@@ -42,6 +42,10 @@ else
     echo "==> ollama already installed — skipping"
 fi
 
+# Pull the AI model used by heald (qwen3-coder:30b)
+echo "==> Pulling Ollama model qwen3-coder:30b..."
+ollama pull qwen3-coder:30b || echo "Warning: Could not pull model (Ollama may not be running)"
+
 # 3. Build heald release binary
 echo "==> Building heald (release)..."
 # Run swift build from the script's directory (the package root)

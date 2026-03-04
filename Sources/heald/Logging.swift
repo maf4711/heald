@@ -4,5 +4,8 @@ extension Logger {
     static let lifecycle  = Logger(subsystem: "com.heald.daemon", category: "lifecycle")
     static let core       = Logger(subsystem: "com.heald.daemon", category: "core")
     static let collector  = Logger(subsystem: "com.heald.daemon", category: "collector")
-    // Phase 5 adds: .healer
+    static let storage    = Logger(subsystem: "com.heald.daemon", category: "storage")
+    static let healer     = Logger(subsystem: "com.heald.daemon", category: "healer")
+    static let health     = Logger(subsystem: "com.heald.daemon", category: "health")
+    static let ai         = Logger(subsystem: "com.heald.daemon", category: "ai")
 }

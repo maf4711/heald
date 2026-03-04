@@ -3,7 +3,7 @@ import ServiceLifecycle
 import OSLog
 
 struct HealdApp: AsyncParsableCommand {
-    static let version = "0.2.0"  // Bump from 0.1.0 — Phase 2 adds metric collection
+    static let version = "1.0.0"  // Full implementation — Phases 3-7
 
     static let configuration = CommandConfiguration(
         commandName: "heald",
