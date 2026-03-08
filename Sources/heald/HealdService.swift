@@ -30,6 +30,9 @@ struct HealdService: Service {
         await ollamaClient.checkAvailability()
         let notificationService = NotificationService(store: store, activityLog: activityLog, ollamaClient: ollamaClient)
 
+        // --- Maintenance (from meister2026.sh) ---
+        let maintenanceService = MaintenanceService(activityLog: activityLog, ollamaClient: ollamaClient)
+
         // --- Collectors ---
         let cpuCollector     = CPUCollector(store: store)
         let ramCollector     = RAMCollector(store: store)
@@ -39,7 +42,8 @@ struct HealdService: Service {
 
         let collectorGroup = ServiceGroup(
             services: [cpuCollector, ramCollector, diskCollector, processCollector, debugWriter,
-                       storageService, cloudPusher, healingService, healthCheckService, notificationService],
+                       storageService, cloudPusher, healingService, healthCheckService, notificationService,
+                       maintenanceService],
             logger: .init(label: "com.heald.services")
         )
 

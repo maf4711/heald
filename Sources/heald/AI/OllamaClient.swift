@@ -81,6 +81,26 @@ actor OllamaClient {
         return await query(prompt: prompt)
     }
 
+    /// Self-healing: analyze a module failure and suggest a fix command.
+    func selfHealAnalyze(moduleName: String, error: String) async -> String? {
+        guard isAvailable else { return nil }
+
+        let prompt = """
+            Du bist ein macOS System-Administrator. Ein Wartungsmodul ist fehlgeschlagen.
+
+            MODUL: \(moduleName)
+            FEHLER: \(error)
+
+            SYSTEM: macOS, Homebrew, Apple Silicon, Swift daemon (LaunchAgent)
+
+            Liefere NUR den Fix-Befehl (Shell-Commands, eine pro Zeile).
+            Keine Erklaerungen. Kein Markdown. Muss ohne Interaktion laufen.
+            Wenn kein Fix moeglich: nur NOFIX
+            """
+
+        return await query(prompt: prompt)
+    }
+
     /// Low-level Ollama API call.
     private func query(prompt: String) async -> String? {
         guard let url = URL(string: "\(baseURL)/api/generate") else { return nil }

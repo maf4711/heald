@@ -8,4 +8,5 @@ extension Logger {
     static let healer     = Logger(subsystem: "com.heald.daemon", category: "healer")
     static let health     = Logger(subsystem: "com.heald.daemon", category: "health")
     static let ai         = Logger(subsystem: "com.heald.daemon", category: "ai")
+    static let maintenance = Logger(subsystem: "com.heald.daemon", category: "maintenance")
 }

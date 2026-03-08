@@ -111,4 +111,24 @@ enum EventType: String, Codable, Sendable {
     case daemonStarted = "daemon_started"
     case daemonStopped = "daemon_stopped"
     case retentionPurge = "retention_purge"
+
+    // Maintenance (from meister2026.sh)
+    case brewUpgrade = "brew_upgrade"
+    case masUpdate = "mas_update"
+    case appMigration = "app_migration"
+    case officeUpdate = "office_update"
+    case cacheCleanup = "cache_cleanup"
+    case trashCleanup = "trash_cleanup"
+    case largeFileFound = "large_file_found"
+    case clamavScan = "clamav_scan"
+    case modelUpdate = "model_update"
+    case spotlightFix = "spotlight_fix"
+    case periodicMaintenance = "periodic_maintenance"
+    case lmStudioSync = "lm_studio_sync"
+    case maintenanceStarted = "maintenance_started"
+    case maintenanceCompleted = "maintenance_completed"
+
+    // Self-Healing
+    case selfHealed = "self_healed"
+    case aiFixBlocked = "ai_fix_blocked"
 }
