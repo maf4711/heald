@@ -64,11 +64,40 @@ actor MetricsDatabase {
                 )
                 """)
 
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS benchmark_results (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    cpu_single_core REAL NOT NULL,
+                    cpu_multi_core REAL NOT NULL,
+                    disk_write_mbs REAL NOT NULL,
+                    disk_read_mbs REAL NOT NULL,
+                    memory_bandwidth_gbs REAL NOT NULL,
+                    duration_seconds REAL NOT NULL,
+                    core_count INTEGER NOT NULL,
+                    overall_score INTEGER NOT NULL
+                )
+                """)
+
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS network_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    interface TEXT NOT NULL,
+                    rx_bytes_per_sec REAL NOT NULL,
+                    tx_bytes_per_sec REAL NOT NULL,
+                    latency_ms REAL,
+                    packet_loss_percent REAL
+                )
+                """)
+
             // Indices for time-range queries and retention cleanup
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_cpu_ts ON cpu_metrics(timestamp)")
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_ram_ts ON ram_metrics(timestamp)")
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_disk_ts ON disk_metrics(timestamp)")
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_proc_ts ON process_metrics(timestamp)")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bench_ts ON benchmark_results(timestamp)")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_net_ts ON network_metrics(timestamp)")
         }
 
         Logger.storage.info("MetricsDatabase opened at \(path)")
@@ -137,6 +166,72 @@ actor MetricsDatabase {
         }
     }
 
+    // MARK: - Benchmark
+
+    func insertBenchmark(_ snapshot: BenchmarkSnapshot) throws {
+        let ts = ISO8601DateFormatter().string(from: snapshot.timestamp)
+
+        try dbQueue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO benchmark_results
+                    (timestamp, cpu_single_core, cpu_multi_core, disk_write_mbs, disk_read_mbs,
+                     memory_bandwidth_gbs, duration_seconds, core_count, overall_score)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [ts, snapshot.cpuSingleCore, snapshot.cpuMultiCore,
+                           snapshot.diskWriteMBs, snapshot.diskReadMBs,
+                           snapshot.memoryBandwidthGBs, snapshot.durationSeconds,
+                           snapshot.coreCount, snapshot.overallScore]
+            )
+        }
+    }
+
+    func recentBenchmarks(limit: Int = 30) throws -> [[String: Any]] {
+        try dbQueue.read { db in
+            let rows = try Row.fetchAll(db,
+                sql: "SELECT * FROM benchmark_results ORDER BY timestamp DESC LIMIT ?",
+                arguments: [limit])
+            return rows.map { row in
+                [
+                    "timestamp": row["timestamp"] as String,
+                    "cpuSingleCore": row["cpu_single_core"] as Double,
+                    "cpuMultiCore": row["cpu_multi_core"] as Double,
+                    "diskWriteMBs": row["disk_write_mbs"] as Double,
+                    "diskReadMBs": row["disk_read_mbs"] as Double,
+                    "memoryBandwidthGBs": row["memory_bandwidth_gbs"] as Double,
+                    "durationSeconds": row["duration_seconds"] as Double,
+                    "coreCount": row["core_count"] as Int,
+                    "overallScore": row["overall_score"] as Int,
+                ]
+            }
+        }
+    }
+
+    // MARK: - Network
+
+    func insertNetwork(_ snapshot: NetworkSnapshot) throws {
+        let ts = ISO8601DateFormatter().string(from: snapshot.timestamp)
+
+        try dbQueue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO network_metrics
+                    (timestamp, interface, rx_bytes_per_sec, tx_bytes_per_sec, latency_ms, packet_loss_percent)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: StatementArguments([
+                    ts as DatabaseValueConvertible,
+                    snapshot.interfaceName as DatabaseValueConvertible,
+                    snapshot.rxBytesPerSec as DatabaseValueConvertible,
+                    snapshot.txBytesPerSec as DatabaseValueConvertible,
+                    snapshot.latencyMs as DatabaseValueConvertible?,
+                    snapshot.packetLossPercent as DatabaseValueConvertible?,
+                ])!
+            )
+        }
+    }
+
     // MARK: - Retention (LOG-03)
 
     func purgeOldRecords() throws {
@@ -148,6 +243,11 @@ actor MetricsDatabase {
             try db.execute(sql: "DELETE FROM ram_metrics WHERE timestamp < ?", arguments: [cutoffStr])
             try db.execute(sql: "DELETE FROM disk_metrics WHERE timestamp < ?", arguments: [cutoffStr])
             try db.execute(sql: "DELETE FROM process_metrics WHERE timestamp < ?", arguments: [cutoffStr])
+            try db.execute(sql: "DELETE FROM network_metrics WHERE timestamp < ?", arguments: [cutoffStr])
+            // Keep benchmark results for 90 days (long-term trend)
+            let benchCutoff = Calendar.current.date(byAdding: .day, value: -90, to: Date())!
+            let benchCutoffStr = ISO8601DateFormatter().string(from: benchCutoff)
+            try db.execute(sql: "DELETE FROM benchmark_results WHERE timestamp < ?", arguments: [benchCutoffStr])
         }
 
         // Reclaim disk space

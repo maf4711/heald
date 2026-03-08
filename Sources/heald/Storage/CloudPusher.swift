@@ -51,6 +51,11 @@ struct CloudPusher: Service {
         let ram = await store.ram
         let disk = await store.disk
         let processes = await store.processes
+        let network = await store.network
+        let battery = await store.battery
+        let uptime = await store.uptime
+        let thermal = await store.thermal
+        let benchmark = await store.benchmark
 
         // Decompose into named sub-dicts to avoid Swift type-checker timeout
         let cpuDict: [String: Any] = [
@@ -79,14 +84,59 @@ struct CloudPusher: Service {
             "topRAM": processes.byRAM.prefix(5).map { processEntryDict($0) },
         ]
 
-        let metrics: [String: Any] = [
+        let networkDict: [String: Any] = [
+            "interface": network.interfaceName,
+            "rxBytesPerSec": round(network.rxBytesPerSec),
+            "txBytesPerSec": round(network.txBytesPerSec),
+            "latencyMs": network.latencyMs as Any,
+            "packetLossPercent": network.packetLossPercent as Any,
+        ]
+
+        var batteryDict: [String: Any]? = nil
+        if battery.isPresent {
+            batteryDict = [
+                "cycleCount": battery.cycleCount,
+                "maxCapacityPercent": battery.maxCapacityPercent,
+                "currentCharge": battery.currentCharge,
+                "isCharging": battery.isCharging,
+                "condition": battery.condition,
+                "temperature": battery.temperature as Any,
+            ]
+        }
+
+        let uptimeDict: [String: Any] = [
+            "systemSeconds": Int(uptime.systemUptimeSeconds),
+            "daemonSeconds": Int(uptime.daemonUptimeSeconds),
+            "systemFormatted": uptime.systemUptimeFormatted,
+        ]
+
+        var benchmarkDict: [String: Any]? = nil
+        if benchmark.timestamp != Date.distantPast {
+            benchmarkDict = [
+                "cpuSingleCore": round(benchmark.cpuSingleCore),
+                "cpuMultiCore": round(benchmark.cpuMultiCore),
+                "diskWriteMBs": round(benchmark.diskWriteMBs),
+                "diskReadMBs": round(benchmark.diskReadMBs),
+                "memoryBandwidthGBs": round(benchmark.memoryBandwidthGBs * 10) / 10,
+                "overallScore": benchmark.overallScore,
+                "coreCount": benchmark.coreCount,
+                "timestamp": ISO8601DateFormatter().string(from: benchmark.timestamp),
+            ]
+        }
+
+        var metrics: [String: Any] = [
             "machineId": machineId,
             "hostname": Host.current().localizedName ?? machineName(),
             "cpu": cpuDict,
             "ram": ramDict,
             "disk": diskDict,
             "processes": processDict,
+            "network": networkDict,
+            "uptime": uptimeDict,
+            "thermal": thermal.thermalState.rawValue,
         ]
+        if let batteryDict { metrics["battery"] = batteryDict }
+        if let benchmarkDict { metrics["benchmark"] = benchmarkDict }
 
         return ["metrics": metrics, "events": [] as [[String: Any]]]
     }

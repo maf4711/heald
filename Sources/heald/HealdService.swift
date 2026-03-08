@@ -30,20 +30,25 @@ struct HealdService: Service {
         await ollamaClient.checkAvailability()
         let notificationService = NotificationService(store: store, activityLog: activityLog, ollamaClient: ollamaClient)
 
-        // --- Maintenance (from meister2026.sh) ---
-        let maintenanceService = MaintenanceService(activityLog: activityLog, ollamaClient: ollamaClient)
+        // --- Maintenance + Benchmark ---
+        let maintenanceService = MaintenanceService(store: store, db: db, activityLog: activityLog, ollamaClient: ollamaClient)
 
         // --- Collectors ---
-        let cpuCollector     = CPUCollector(store: store)
-        let ramCollector     = RAMCollector(store: store)
-        let diskCollector    = DiskCollector(store: store)
-        let processCollector = ProcessCollector(store: store)
-        let debugWriter      = DebugStatusWriter(store: store)
+        let cpuCollector      = CPUCollector(store: store)
+        let ramCollector      = RAMCollector(store: store)
+        let diskCollector     = DiskCollector(store: store)
+        let processCollector  = ProcessCollector(store: store)
+        let networkCollector  = NetworkCollector(store: store)
+        let batteryCollector  = BatteryCollector(store: store)
+        let uptimeCollector   = UptimeCollector(store: store)
+        let thermalCollector  = ThermalCollector(store: store, activityLog: activityLog)
+        let debugWriter       = DebugStatusWriter(store: store)
 
         let collectorGroup = ServiceGroup(
-            services: [cpuCollector, ramCollector, diskCollector, processCollector, debugWriter,
-                       storageService, cloudPusher, healingService, healthCheckService, notificationService,
-                       maintenanceService],
+            services: [cpuCollector, ramCollector, diskCollector, processCollector,
+                       networkCollector, batteryCollector, uptimeCollector, thermalCollector,
+                       debugWriter, storageService, cloudPusher, healingService,
+                       healthCheckService, notificationService, maintenanceService],
             logger: .init(label: "com.heald.services")
         )
 

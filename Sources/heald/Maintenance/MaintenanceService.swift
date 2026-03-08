@@ -3,8 +3,10 @@ import ServiceLifecycle
 import OSLog
 
 /// Orchestrates all maintenance tasks (adapted from meister2026.sh).
-/// Daily tasks run at 03:00, weekly tasks on Sundays at 04:00.
+/// Benchmark at 02:00, daily tasks at 03:00, weekly tasks on Sundays at 04:00.
 struct MaintenanceService: Service {
+    let store: MetricsStore
+    let db: MetricsDatabase
     let activityLog: ActivityLog
     let ollamaClient: OllamaClient
 
@@ -15,6 +17,7 @@ struct MaintenanceService: Service {
         let systemCleaner = SystemCleaner()
         let clamAVScanner = ClamAVScanner()
         let ollamaModelUpdater = OllamaModelUpdater()
+        let systemBenchmark = SystemBenchmark()
         let selfHealingRunner = SelfHealingRunner(
             ollamaClient: ollamaClient,
             activityLog: activityLog
@@ -27,6 +30,16 @@ struct MaintenanceService: Service {
             try await Task.sleep(for: .seconds(3600)) // 1 hour tick
 
             let now = Calendar.current.dateComponents([.hour, .weekday], from: Date())
+
+            // ── Daily benchmark at 02:00 ──
+            if now.hour == 2 {
+                Logger.benchmark.info("Starting daily benchmark...")
+                await selfHealingRunner.runSafe(name: "Benchmark") {
+                    let result = try await systemBenchmark.runAll(activityLog: activityLog)
+                    await store.updateBenchmark(result)
+                    try await db.insertBenchmark(result)
+                }
+            }
 
             // ── Daily maintenance at 03:00 ──
             if now.hour == 3 {

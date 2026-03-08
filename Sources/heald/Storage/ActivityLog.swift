@@ -131,4 +131,11 @@ enum EventType: String, Codable, Sendable {
     // Self-Healing
     case selfHealed = "self_healed"
     case aiFixBlocked = "ai_fix_blocked"
+
+    // Benchmark
+    case benchmarkStarted = "benchmark_started"
+    case benchmarkCompleted = "benchmark_completed"
+
+    // Thermal
+    case thermalThrottling = "thermal_throttling"
 }
