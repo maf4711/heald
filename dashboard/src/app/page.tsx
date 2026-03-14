@@ -8,10 +8,10 @@ interface Machine {
   machineId: string;
   hostname: string;
   lastSeen: string;
-  cpu: { overall: number; perCore: number[] };
-  ram: { usedGB: number; wiredGB: number; compressedGB: number; swapUsedMB: number; pressureLevel: number };
-  disk: { volumes: { name: string; mountPoint: string; totalGB: number; freeGB: number }[]; smart: { bsdName: string; status: string }[] };
-  processes: {
+  cpu?: { overall: number; perCore: number[] };
+  ram?: { usedGB: number; wiredGB: number; compressedGB: number; swapUsedMB: number; pressureLevel: number };
+  disk?: { volumes: { name: string; mountPoint: string; totalGB: number; freeGB: number }[]; smart: { bsdName: string; status: string }[] };
+  processes?: {
     topCPU: { pid: number; name: string; cpuPercent: number; ramMB: number; system: boolean }[];
     topRAM: { pid: number; name: string; cpuPercent: number; ramMB: number; system: boolean }[];
   };

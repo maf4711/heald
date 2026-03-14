@@ -5,11 +5,22 @@ struct SettingsView: View {
 
     @Environment(AppState.self) private var appState
     @AppStorage("heald_api_url") private var apiURL = "https://heald.merados.com"
-    @AppStorage("heald_api_key") private var apiKey = ""
+    @AppStorage("heald_api_key") private var apiKey = "REDACTED"
     @AppStorage("heald_refresh_interval") private var refreshInterval = 10.0
     @AppStorage("heald_notifications_enabled") private var notificationsEnabled = true
     @State private var isTesting = false
     @State private var testResult: TestResult?
+    @State private var draftURL = ""
+    @State private var draftKey = ""
+    @State private var didInitDrafts = false
+
+    private var currentURL: Binding<String> {
+        isOnboarding ? $draftURL : $apiURL
+    }
+
+    private var currentKey: Binding<String> {
+        isOnboarding ? $draftKey : $apiKey
+    }
 
     var body: some View {
         NavigationStack {
@@ -24,7 +35,7 @@ struct SettingsView: View {
                         Text("API URL")
                             .font(.caption)
                             .foregroundStyle(Theme.textTertiary)
-                        TextField("https://heald.merados.com", text: $apiURL)
+                        TextField("https://heald.merados.com", text: currentURL)
                             .font(.subheadline.monospaced())
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -36,29 +47,11 @@ struct SettingsView: View {
                         Text("API Key")
                             .font(.caption)
                             .foregroundStyle(Theme.textTertiary)
-                        SecureField("Enter your API key", text: $apiKey)
+                        SecureField("Enter your API key", text: currentKey)
                             .font(.subheadline.monospaced())
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                     }
-                    .listRowBackground(Theme.cardBackground)
-
-                    Button {
-                        testConnection()
-                    } label: {
-                        HStack {
-                            if isTesting {
-                                ProgressView()
-                                    .tint(Theme.accent)
-                                    .scaleEffect(0.8)
-                            } else {
-                                Image(systemName: "antenna.radiowaves.left.and.right")
-                            }
-                            Text(isTesting ? "Testing..." : "Test Connection")
-                        }
-                        .foregroundStyle(Theme.accent)
-                    }
-                    .disabled(apiKey.isEmpty || isTesting)
                     .listRowBackground(Theme.cardBackground)
 
                     if let result = testResult {
@@ -74,6 +67,57 @@ struct SettingsView: View {
                 } header: {
                     Text("Connection")
                         .foregroundStyle(Theme.textSecondary)
+                }
+
+                if isOnboarding {
+                    Section {
+                        Button {
+                            connectAndContinue()
+                        } label: {
+                            HStack {
+                                Spacer()
+                                if isTesting {
+                                    ProgressView()
+                                        .tint(.white)
+                                        .scaleEffect(0.8)
+                                    Text("Verbinde...")
+                                        .fontWeight(.semibold)
+                                } else {
+                                    Text("Verbinden")
+                                        .fontWeight(.semibold)
+                                }
+                                Spacer()
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.vertical, 4)
+                        }
+                        .disabled(currentKey.wrappedValue.isEmpty || isTesting)
+                        .listRowBackground(
+                            currentKey.wrappedValue.isEmpty
+                                ? Color.gray
+                                : Theme.accent
+                        )
+                    }
+                } else {
+                    Section {
+                        Button {
+                            testConnection()
+                        } label: {
+                            HStack {
+                                if isTesting {
+                                    ProgressView()
+                                        .tint(Theme.accent)
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "antenna.radiowaves.left.and.right")
+                                }
+                                Text(isTesting ? "Testing..." : "Test Connection")
+                            }
+                            .foregroundStyle(Theme.accent)
+                        }
+                        .disabled(apiKey.isEmpty || isTesting)
+                        .listRowBackground(Theme.cardBackground)
+                    }
                 }
 
                 if !isOnboarding {
@@ -160,6 +204,12 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .background(Theme.background)
             .navigationTitle(isOnboarding ? "Setup" : "Settings")
+            .onAppear {
+                guard !didInitDrafts else { return }
+                didInitDrafts = true
+                draftURL = apiURL
+                draftKey = apiKey
+            }
         }
     }
 
@@ -185,6 +235,38 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, Theme.paddingLG)
             .listRowBackground(Color.clear)
+        }
+    }
+
+    // MARK: - Connect (Onboarding)
+
+    private func connectAndContinue() {
+        isTesting = true
+        testResult = nil
+
+        // Save draft values to AppStorage so HealdAPI can use them
+        apiURL = draftURL
+        apiKey = draftKey
+
+        Task {
+            do {
+                let machines = try await HealdAPI.shared.fetchMachines()
+                await MainActor.run {
+                    testResult = TestResult(
+                        success: true,
+                        message: "Verbunden. \(machines.count) Mac(s) gefunden."
+                    )
+                    isTesting = false
+                    appState.markConfigured()
+                    Task { await appState.refresh() }
+                }
+            } catch {
+                await MainActor.run {
+                    testResult = TestResult(success: false, message: error.localizedDescription)
+                    isTesting = false
+                    // Don't clear stored values — user can retry
+                }
+            }
         }
     }
 

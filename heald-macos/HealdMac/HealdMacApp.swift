@@ -8,6 +8,7 @@ struct HealdMacApp: App {
         MenuBarExtra {
             MenuBarPopover()
                 .environment(appState)
+                .preferredColorScheme(.dark)
         } label: {
             Image(systemName: appState.menuBarIcon)
                 .symbolRenderingMode(.hierarchical)

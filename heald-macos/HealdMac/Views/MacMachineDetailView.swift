@@ -12,14 +12,14 @@ struct MacMachineDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: Theme.paddingLG) {
+            VStack(spacing: 20) {
                 // Header
                 HStack {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(machine.hostname)
-                            .font(.title2.weight(.bold))
+                            .font(.system(.title2, design: .rounded, weight: .bold))
                             .foregroundStyle(Theme.textPrimary)
-                        HStack(spacing: 8) {
+                        HStack(spacing: 10) {
                             StatusPill(status: machine.status)
                             Text(machine.lastSeenFormatted)
                                 .font(.caption)
@@ -27,6 +27,10 @@ struct MacMachineDetailView: View {
                             Text(machine.machineId)
                                 .font(.caption.monospaced())
                                 .foregroundStyle(Theme.textTertiary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Theme.cardBorder.opacity(0.5))
+                                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                         }
                     }
                     Spacer()
@@ -36,12 +40,18 @@ struct MacMachineDetailView: View {
                 HStack(spacing: Theme.paddingLG) {
                     // CPU
                     VStack(alignment: .leading, spacing: Theme.paddingMD) {
-                        Label("CPU", systemImage: "cpu")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.textPrimary)
+                        HStack {
+                            Image(systemName: "cpu.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.accent)
+                            Text("CPU")
+                                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                                .foregroundStyle(Theme.textPrimary)
+                        }
                         Text("\(machine.cpu.overallPercent)%")
                             .font(.system(.title, design: .rounded, weight: .bold))
                             .foregroundStyle(Theme.accent)
+                            .shadow(color: Theme.accent.opacity(0.3), radius: 8)
 
                         if let history, !history.isEmpty {
                             MiniChart(data: history.map { $0.cpuOverall }, color: Theme.accent, height: 50)
@@ -51,22 +61,28 @@ struct MacMachineDetailView: View {
                             coreGrid
                         }
                     }
-                    .cardStyle()
+                    .cardStyle(glow: Theme.accent)
 
                     // RAM
                     VStack(alignment: .leading, spacing: Theme.paddingMD) {
-                        Label("Memory", systemImage: "memorychip")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.textPrimary)
+                        HStack {
+                            Image(systemName: "memorychip.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.accentAI)
+                            Text("Memory")
+                                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                                .foregroundStyle(Theme.textPrimary)
+                        }
                         Text(String(format: "%.1f GB", machine.ram.usedGB))
                             .font(.system(.title, design: .rounded, weight: .bold))
                             .foregroundStyle(Theme.accentAI)
+                            .shadow(color: Theme.accentAI.opacity(0.3), radius: 8)
 
                         if let history, !history.isEmpty {
                             MiniChart(data: history.map { $0.ramUsedGB }, color: Theme.accentAI, height: 50)
                         }
 
-                        VStack(spacing: 4) {
+                        VStack(spacing: 6) {
                             MetricDetailRow(label: "Wired", value: String(format: "%.1f GB", machine.ram.wiredGB))
                             MetricDetailRow(label: "Compressed", value: String(format: "%.1f GB", machine.ram.compressedGB))
                             MetricDetailRow(label: "Swap", value: String(format: "%.0f MB", machine.ram.swapUsedMB))
@@ -75,16 +91,21 @@ struct MacMachineDetailView: View {
                                                    machine.ram.pressureLevel >= 2 ? Theme.warning : Theme.success)
                         }
                     }
-                    .cardStyle()
+                    .cardStyle(glow: Theme.accentAI)
                 }
 
                 // Disk + Processes
                 HStack(alignment: .top, spacing: Theme.paddingLG) {
                     // Storage
                     VStack(alignment: .leading, spacing: Theme.paddingMD) {
-                        Label("Storage", systemImage: "internaldrive")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.textPrimary)
+                        HStack {
+                            Image(systemName: "internaldrive.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.warning)
+                            Text("Storage")
+                                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                                .foregroundStyle(Theme.textPrimary)
+                        }
 
                         ForEach(machine.disk.volumes) { vol in
                             VStack(alignment: .leading, spacing: 4) {
@@ -97,18 +118,32 @@ struct MacMachineDetailView: View {
                                         .font(.caption.monospacedDigit())
                                         .foregroundStyle(Theme.textSecondary)
                                 }
-                                ProgressView(value: vol.usedPercent)
-                                    .tint(vol.usedPercent > 0.9 ? Theme.critical :
-                                          vol.usedPercent > 0.75 ? Theme.warning : Theme.accent)
+                                GeometryReader { geo in
+                                    ZStack(alignment: .leading) {
+                                        Capsule().fill(Theme.cardBorder).frame(height: 4)
+                                        Capsule()
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [diskColor(vol.usedPercent), diskColor(vol.usedPercent).opacity(0.6)],
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                )
+                                            )
+                                            .frame(width: geo.size.width * min(vol.usedPercent, 1.0), height: 4)
+                                            .shadow(color: diskColor(vol.usedPercent).opacity(0.3), radius: 3, y: 1)
+                                    }
+                                }
+                                .frame(height: 4)
                             }
                         }
 
                         if !machine.disk.smart.isEmpty {
-                            Divider().background(Theme.cardBorder)
+                            Divider().background(Theme.cardBorder.opacity(0.5))
                             ForEach(machine.disk.smart) { smart in
                                 HStack {
-                                    Image(systemName: smart.isHealthy ? "checkmark.shield" : "xmark.shield")
+                                    Image(systemName: smart.isHealthy ? "checkmark.shield.fill" : "xmark.shield.fill")
                                         .foregroundStyle(smart.isHealthy ? Theme.success : Theme.critical)
+                                        .shadow(color: (smart.isHealthy ? Theme.success : Theme.critical).opacity(0.3), radius: 4)
                                     Text(smart.bsdName)
                                         .font(.subheadline)
                                         .foregroundStyle(Theme.textPrimary)
@@ -124,14 +159,19 @@ struct MacMachineDetailView: View {
 
                     // Processes
                     VStack(alignment: .leading, spacing: Theme.paddingMD) {
-                        Label("Top Processes", systemImage: "list.number")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.textPrimary)
+                        HStack {
+                            Image(systemName: "list.number")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.critical)
+                            Text("Top Processes")
+                                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                                .foregroundStyle(Theme.textPrimary)
+                        }
 
                         ForEach(Array(machine.processes.topCPU.prefix(8).enumerated()), id: \.element.id) { idx, proc in
                             HStack(spacing: Theme.paddingSM) {
                                 Text("\(idx + 1)")
-                                    .font(.caption2.weight(.bold))
+                                    .font(.caption2.weight(.bold).monospacedDigit())
                                     .foregroundStyle(idx < 3 ? Theme.critical : Theme.textTertiary)
                                     .frame(width: 16)
 
@@ -143,11 +183,11 @@ struct MacMachineDetailView: View {
                                 if proc.system {
                                     Text("SYS")
                                         .font(.system(size: 7, weight: .bold))
-                                        .padding(.horizontal, 3)
+                                        .padding(.horizontal, 4)
                                         .padding(.vertical, 1)
-                                        .background(Theme.textTertiary.opacity(0.2))
-                                        .foregroundStyle(Theme.textTertiary)
-                                        .clipShape(RoundedRectangle(cornerRadius: 2))
+                                        .background(Theme.accentAI.opacity(0.1))
+                                        .foregroundStyle(Theme.accentAI)
+                                        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                                 }
 
                                 Spacer()
@@ -170,9 +210,14 @@ struct MacMachineDetailView: View {
                 // Events
                 if !machineEvents.isEmpty {
                     VStack(alignment: .leading, spacing: Theme.paddingMD) {
-                        Label("Recent Events", systemImage: "clock.arrow.circlepath")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.textPrimary)
+                        HStack {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.accentAI)
+                            Text("Recent Events")
+                                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                                .foregroundStyle(Theme.textPrimary)
+                        }
 
                         ForEach(machineEvents.prefix(10)) { event in
                             MacEventRow(event: event)
@@ -183,19 +228,27 @@ struct MacMachineDetailView: View {
             }
             .padding(Theme.paddingXL)
         }
+        .background(Theme.background)
+    }
+
+    private func diskColor(_ v: Double) -> Color {
+        if v > 0.9 { return Theme.critical }
+        if v > 0.75 { return Theme.warning }
+        return Theme.accent
     }
 
     private var coreGrid: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: min(machine.cpu.perCore.count, 8)), spacing: 3) {
             ForEach(Array(machine.cpu.perCore.enumerated()), id: \.offset) { _, value in
-                RoundedRectangle(cornerRadius: 2)
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .fill(coreColor(value))
-                    .frame(height: 8)
+                    .frame(height: 10)
                     .overlay(
                         Text("\(Int(value * 100))")
                             .font(.system(size: 7, weight: .medium, design: .monospaced))
                             .foregroundStyle(.white.opacity(0.8))
                     )
+                    .shadow(color: coreColor(value).opacity(0.3), radius: 2)
             }
         }
     }

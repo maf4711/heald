@@ -3,7 +3,7 @@ import SwiftUI
 struct SettingsPane: View {
     @Environment(AppState.self) private var appState
     @AppStorage("heald_api_url") private var apiURL = "https://heald.merados.com"
-    @AppStorage("heald_api_key") private var apiKey = ""
+    @AppStorage("heald_api_key") private var apiKey = "REDACTED"
     @AppStorage("heald_refresh_interval") private var refreshInterval = 10.0
     @State private var isTesting = false
     @State private var testResult: (success: Bool, message: String)?
@@ -26,14 +26,15 @@ struct SettingsPane: View {
                     if isTesting {
                         ProgressView()
                             .scaleEffect(0.7)
+                            .tint(Theme.accent)
                     }
 
                     if let result = testResult {
                         Image(systemName: result.success ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .foregroundStyle(result.success ? .green : .red)
+                            .foregroundStyle(result.success ? Theme.success : Theme.critical)
                         Text(result.message)
                             .font(.caption)
-                            .foregroundStyle(result.success ? .green : .red)
+                            .foregroundStyle(result.success ? Theme.success : Theme.critical)
                     }
                 }
             }

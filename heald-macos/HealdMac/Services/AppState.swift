@@ -3,6 +3,16 @@ import SwiftUI
 
 @Observable
 final class AppState {
+    // MARK: - UserDefaults Keys
+
+    private enum Keys {
+        static let apiKey = "heald_api_key"
+        static let apiURL = "heald_api_url"
+        static let refreshInterval = "heald_refresh_interval"
+    }
+
+    // MARK: - Published State
+
     var machines: [Machine] = []
     var machineHistory: [String: [MetricSnapshot]] = [:]
     var events: [ActivityEvent] = []
@@ -11,6 +21,20 @@ final class AppState {
     var lastRefresh: Date?
 
     private var refreshTimer: Timer?
+    private var isRefreshing = false
+
+    // MARK: - Init
+
+    init() {
+        let defaults = UserDefaults.standard
+        if defaults.string(forKey: Keys.apiKey) == nil {
+            defaults.set("REDACTED", forKey: Keys.apiKey)
+            defaults.set("https://heald.merados.com", forKey: Keys.apiURL)
+            print("[AppState] Set default API configuration")
+        }
+    }
+
+    // MARK: - Computed Properties
 
     var healthyCount: Int { machines.filter { $0.status == .healthy }.count }
     var warningCount: Int { machines.filter { $0.status == .warning }.count }
@@ -39,13 +63,15 @@ final class AppState {
     }
 
     var isConfigured: Bool {
-        let key = UserDefaults.standard.string(forKey: "heald_api_key") ?? ""
+        let key = UserDefaults.standard.string(forKey: Keys.apiKey) ?? ""
         return !key.isEmpty
     }
 
+    // MARK: - Auto Refresh
+
     func startAutoRefresh() {
         refreshTimer?.invalidate()
-        let interval = UserDefaults.standard.double(forKey: "heald_refresh_interval")
+        let interval = UserDefaults.standard.double(forKey: Keys.refreshInterval)
         refreshTimer = Timer.scheduledTimer(withTimeInterval: interval > 0 ? interval : 10, repeats: true) { [weak self] _ in
             Task { await self?.refresh() }
         }
@@ -56,11 +82,28 @@ final class AppState {
         refreshTimer = nil
     }
 
+    // MARK: - Refresh
+
     @MainActor
     func refresh() async {
-        guard isConfigured else { return }
+        guard isConfigured else {
+            error = "Not configured — set API key in Settings"
+            isLoading = false
+            return
+        }
+        guard !isRefreshing else {
+            print("[AppState] Refresh already in progress, skipping")
+            return
+        }
+
+        isRefreshing = true
         if machines.isEmpty { isLoading = true }
         error = nil
+
+        defer {
+            isLoading = false
+            isRefreshing = false
+        }
 
         do {
             async let machinesResult = HealdAPI.shared.fetchMachines()
@@ -75,9 +118,10 @@ final class AppState {
             }
             events = fetchedEvents
             lastRefresh = Date()
+            print("[AppState] Refresh OK — \(machines.count) machines, \(events.count) events")
         } catch {
             self.error = error.localizedDescription
+            print("[AppState] Refresh failed: \(error)")
         }
-        isLoading = false
     }
 }
