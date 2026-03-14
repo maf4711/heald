@@ -28,18 +28,22 @@ struct MacJournalView: View {
         VStack(spacing: 0) {
             // Toolbar
             HStack(spacing: Theme.paddingSM) {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
-                        .font(.caption)
+                        .font(.system(size: 12))
                         .foregroundStyle(Theme.textTertiary)
                     TextField("Search events...", text: $searchText)
                         .textFieldStyle(.plain)
                         .font(.subheadline)
                 }
                 .padding(.horizontal, Theme.paddingMD)
-                .padding(.vertical, 7)
+                .padding(.vertical, 8)
                 .background(Theme.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadiusSM))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadiusSM, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.cornerRadiusSM, style: .continuous)
+                        .stroke(Theme.cardBorder, lineWidth: 0.5)
+                )
 
                 ForEach(EventCategory.allCases, id: \.self) { category in
                     Button {
@@ -47,10 +51,14 @@ struct MacJournalView: View {
                     } label: {
                         Image(systemName: category.icon)
                             .font(.system(size: 11))
-                            .frame(width: 28, height: 28)
-                            .background(selectedCategory == category ? Theme.accent.opacity(0.15) : Theme.cardBackground)
+                            .frame(width: 30, height: 30)
+                            .background(selectedCategory == category ? Theme.accentDim : Theme.cardBackground)
                             .foregroundStyle(selectedCategory == category ? Theme.accent : Theme.textTertiary)
-                            .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadiusSM))
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadiusSM, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: Theme.cornerRadiusSM, style: .continuous)
+                                    .stroke(selectedCategory == category ? Theme.accent.opacity(0.3) : Theme.cardBorder, lineWidth: 0.5)
+                            )
                     }
                     .buttonStyle(.plain)
                     .help(category.label)
@@ -60,8 +68,8 @@ struct MacJournalView: View {
                     Button {
                         selectedCategory = nil
                     } label: {
-                        Image(systemName: "xmark")
-                            .font(.caption)
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
                             .foregroundStyle(Theme.textTertiary)
                     }
                     .buttonStyle(.plain)
@@ -69,9 +77,9 @@ struct MacJournalView: View {
             }
             .padding(.horizontal, Theme.paddingXL)
             .padding(.vertical, Theme.paddingMD)
-            .background(Theme.background)
+            .background(Theme.surfacePrimary)
 
-            Divider().background(Theme.cardBorder)
+            Rectangle().fill(Theme.cardBorder).frame(height: 0.5)
 
             // Event List
             if filteredEvents.isEmpty {
@@ -92,12 +100,13 @@ struct MacJournalView: View {
                             ForEach(events) { event in
                                 MacEventRow(event: event)
                                     .listRowBackground(Theme.background)
-                                    .listRowSeparatorTint(Theme.cardBorder)
+                                    .listRowSeparatorTint(Theme.cardBorder.opacity(0.5))
                             }
                         } header: {
                             Text(date)
-                                .font(.caption.weight(.semibold))
+                                .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(Theme.textTertiary)
+                                .textCase(.uppercase)
                         }
                     }
                 }

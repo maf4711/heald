@@ -7,12 +7,13 @@ struct MenuBarPopover: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HStack {
+            HStack(spacing: 10) {
                 Image(systemName: "shield.checkered")
                     .font(.title3)
                     .foregroundStyle(Theme.accent)
+                    .shadow(color: Theme.accent.opacity(0.4), radius: 6)
                 Text("Heald")
-                    .font(.headline)
+                    .font(.system(.headline, design: .rounded, weight: .bold))
                     .foregroundStyle(Theme.textPrimary)
                 Spacer()
                 if appState.isLoading {
@@ -23,9 +24,9 @@ struct MenuBarPopover: View {
                 StatusDot(status: appState.worstStatus)
             }
             .padding(Theme.paddingLG)
-            .background(Theme.cardBackground)
+            .background(Theme.surfacePrimary)
 
-            Divider().background(Theme.cardBorder)
+            Rectangle().fill(Theme.cardBorder).frame(height: 0.5)
 
             if !appState.isConfigured {
                 unconfiguredView
@@ -38,21 +39,27 @@ struct MenuBarPopover: View {
                         }
 
                         if appState.machines.isEmpty && !appState.isLoading {
-                            Text("No machines connected")
-                                .font(.subheadline)
-                                .foregroundStyle(Theme.textTertiary)
-                                .padding(.vertical, Theme.paddingXL)
+                            VStack(spacing: 8) {
+                                Image(systemName: "desktopcomputer.trianglebadge.exclamationmark")
+                                    .font(.title2)
+                                    .foregroundStyle(Theme.textTertiary)
+                                Text("No machines connected")
+                                    .font(.subheadline)
+                                    .foregroundStyle(Theme.textTertiary)
+                            }
+                            .padding(.vertical, Theme.paddingXL)
                         }
                     }
+                    .padding(.vertical, 4)
                 }
                 .frame(maxHeight: 300)
 
                 // Recent Events
                 if !appState.events.isEmpty {
-                    Divider().background(Theme.cardBorder)
+                    Rectangle().fill(Theme.cardBorder).frame(height: 0.5)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Recent")
-                            .font(.caption.weight(.semibold))
+                        Text("RECENT")
+                            .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Theme.textTertiary)
                             .padding(.horizontal, Theme.paddingLG)
                             .padding(.top, Theme.paddingSM)
@@ -65,16 +72,22 @@ struct MenuBarPopover: View {
                 }
             }
 
-            Divider().background(Theme.cardBorder)
+            Rectangle().fill(Theme.cardBorder).frame(height: 0.5)
 
             // Footer
             HStack {
-                Button("Open Dashboard") {
+                Button {
                     openWindow(id: "dashboard")
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.up.forward.square")
+                            .font(.caption)
+                        Text("Dashboard")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .foregroundStyle(Theme.accent)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Theme.accent)
-                .font(.subheadline.weight(.medium))
 
                 Spacer()
 
@@ -88,14 +101,17 @@ struct MenuBarPopover: View {
                     Task { await appState.refresh() }
                 } label: {
                     Image(systemName: "arrow.clockwise")
-                        .font(.caption)
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 24, height: 24)
+                        .background(Theme.cardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, Theme.paddingLG)
             .padding(.vertical, Theme.paddingMD)
-            .background(Theme.cardBackground)
+            .background(Theme.surfacePrimary)
         }
         .frame(width: 340)
         .background(Theme.background)
@@ -107,11 +123,11 @@ struct MenuBarPopover: View {
 
     private var unconfiguredView: some View {
         VStack(spacing: Theme.paddingMD) {
-            Image(systemName: "key")
+            Image(systemName: "key.fill")
                 .font(.title)
                 .foregroundStyle(Theme.textTertiary)
             Text("Not configured")
-                .font(.subheadline)
+                .font(.subheadline.weight(.medium))
                 .foregroundStyle(Theme.textSecondary)
             Text("Open Settings to add your API key")
                 .font(.caption)
@@ -126,6 +142,7 @@ struct MenuBarPopover: View {
 
 struct PopoverMachineRow: View {
     let machine: Machine
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: Theme.paddingMD) {
@@ -133,7 +150,7 @@ struct PopoverMachineRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(machine.hostname)
-                    .font(.subheadline.weight(.medium))
+                    .font(.system(.subheadline, design: .default, weight: .medium))
                     .foregroundStyle(Theme.textPrimary)
                 Text(machine.lastSeenFormatted)
                     .font(.caption2)
@@ -150,8 +167,11 @@ struct PopoverMachineRow: View {
             }
         }
         .padding(.horizontal, Theme.paddingLG)
-        .padding(.vertical, Theme.paddingSM)
-        .background(Theme.background)
+        .padding(.vertical, 7)
+        .background(isHovered ? Theme.cardBorder.opacity(0.3) : .clear)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.horizontal, 4)
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -166,8 +186,9 @@ struct MiniStat: View {
                 .font(.caption.monospacedDigit().weight(.medium))
                 .foregroundStyle(color)
             Text(label)
-                .font(.system(size: 8))
+                .font(.system(size: 8, weight: .medium))
                 .foregroundStyle(Theme.textTertiary)
+                .textCase(.uppercase)
         }
     }
 }
@@ -179,6 +200,7 @@ struct StatusDot: View {
         Circle()
             .fill(Theme.statusColor(status))
             .frame(width: 8, height: 8)
+            .shadow(color: Theme.statusColor(status).opacity(0.5), radius: 3)
     }
 }
 
@@ -204,7 +226,11 @@ struct PopoverEventRow: View {
             if event.aiGenerated {
                 Text("AI")
                     .font(.system(size: 8, weight: .bold))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Theme.accentAIDim)
                     .foregroundStyle(Theme.accentAI)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
             }
 
             Text(event.timestampFormatted)

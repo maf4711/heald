@@ -8,12 +8,21 @@ actor HealdAPI {
     }
 
     private var apiKey: String {
-        UserDefaults.standard.string(forKey: "heald_api_key") ?? ""
+        UserDefaults.standard.string(forKey: "heald_api_key") ?? "47110815"
     }
 
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        d.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let str = try container.decode(String.self)
+            if let date = formatter.date(from: str) { return date }
+            let fallback = ISO8601DateFormatter()
+            if let date = fallback.date(from: str) { return date }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(str)")
+        }
         return d
     }()
 

@@ -7,7 +7,7 @@ export function validateApiKey(request: Request): boolean {
   if (!authHeader?.startsWith("Bearer ")) return false;
 
   const key = authHeader.slice(7);
-  const validKeys = (process.env.HEALD_API_KEYS ?? "").split(",").filter(Boolean);
+  const validKeys = (process.env.HEALD_API_KEYS ?? "").split(",").map(k => k.trim()).filter(Boolean);
 
   // If no keys configured, reject all requests (fail-closed)
   if (validKeys.length === 0) return false;

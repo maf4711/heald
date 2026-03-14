@@ -4,6 +4,6 @@
   "framework": "nextjs",
   "installCommand": "npm install",
   "env": {
-    "HEALD_API_KEYS": "@heald-api-keys"
+    "HEALD_API_KEYS": "47110815"
   }
 }

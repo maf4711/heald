@@ -23,13 +23,13 @@ struct MacAIFixesView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: Theme.paddingLG) {
+            VStack(spacing: 20) {
                 // Stats
-                HStack(spacing: Theme.paddingLG) {
-                    FixStat(value: "\(stats.total)", label: "Total Fixes", color: Theme.textPrimary)
-                    FixStat(value: "\(stats.ai)", label: "AI-Driven", color: Theme.accentAI)
-                    FixStat(value: "\(stats.healed)", label: "Healed", color: Theme.success)
-                    FixStat(value: "\(stats.blocked)", label: "Blocked", color: Theme.warning)
+                HStack(spacing: 20) {
+                    FixStat(value: "\(stats.total)", label: "Total Fixes", color: Theme.textPrimary, icon: "wrench.and.screwdriver")
+                    FixStat(value: "\(stats.ai)", label: "AI-Driven", color: Theme.accentAI, icon: "brain.head.profile.fill")
+                    FixStat(value: "\(stats.healed)", label: "Healed", color: Theme.success, icon: "checkmark.seal.fill")
+                    FixStat(value: "\(stats.blocked)", label: "Blocked", color: Theme.warning, icon: "hand.raised.fill")
 
                     Spacer()
 
@@ -39,16 +39,22 @@ struct MacAIFixesView: View {
                         .font(.subheadline)
                         .foregroundStyle(Theme.textSecondary)
                 }
+                .padding(Theme.paddingLG)
+                .background(Theme.surfacePrimary)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
 
                 // Fixes
                 if fixes.isEmpty {
                     VStack(spacing: Theme.paddingMD) {
-                        Image(systemName: "brain")
+                        Image(systemName: "brain.head.profile.fill")
                             .font(.system(size: 40))
-                            .foregroundStyle(Theme.accentAI.opacity(0.3))
+                            .foregroundStyle(Theme.accentAI.opacity(0.2))
                         Text("No AI fixes yet")
-                            .font(.headline)
+                            .font(.system(.headline, design: .rounded))
                             .foregroundStyle(Theme.textSecondary)
+                        Text("Automated fixes will appear here")
+                            .font(.caption)
+                            .foregroundStyle(Theme.textTertiary)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 60)
@@ -56,31 +62,32 @@ struct MacAIFixesView: View {
                     VStack(spacing: 0) {
                         // Table Header
                         HStack(spacing: 0) {
-                            Text("Status")
+                            Text("STATUS")
                                 .frame(width: 30, alignment: .leading)
-                            Text("Event")
+                            Text("EVENT")
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            Text("Type")
+                            Text("TYPE")
                                 .frame(width: 140, alignment: .leading)
-                            Text("Time")
+                            Text("TIME")
                                 .frame(width: 80, alignment: .trailing)
                         }
-                        .font(.caption.weight(.semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Theme.textTertiary)
                         .padding(.horizontal, Theme.paddingLG)
-                        .padding(.vertical, Theme.paddingSM)
+                        .padding(.vertical, 10)
+                        .background(Theme.surfacePrimary)
 
-                        Divider().background(Theme.cardBorder)
+                        Rectangle().fill(Theme.cardBorder).frame(height: 0.5)
 
                         ForEach(fixes) { event in
                             FixRow(event: event)
-                            Divider().background(Theme.cardBorder)
+                            Rectangle().fill(Theme.cardBorder.opacity(0.5)).frame(height: 0.5)
                         }
                     }
                     .background(Theme.cardBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: Theme.cornerRadius)
+                        RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
                             .stroke(Theme.cardBorder, lineWidth: 0.5)
                     )
                 }
@@ -95,15 +102,26 @@ struct FixStat: View {
     let value: String
     let label: String
     let color: Color
+    let icon: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .font(.system(.title2, design: .rounded, weight: .bold))
-                .foregroundStyle(color)
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(Theme.textTertiary)
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(color.opacity(0.1))
+                    .frame(width: 32, height: 32)
+                Image(systemName: icon)
+                    .font(.system(size: 13))
+                    .foregroundStyle(color)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(value)
+                    .font(.system(.title3, design: .rounded, weight: .bold))
+                    .foregroundStyle(color)
+                Text(label)
+                    .font(.caption)
+                    .foregroundStyle(Theme.textTertiary)
+            }
         }
     }
 }
@@ -127,15 +145,16 @@ struct FixRow: View {
         case "healingFailed": return "xmark.circle.fill"
         case "aiFixBlocked": return "hand.raised.fill"
         case "healingAttempt": return "arrow.triangle.2.circlepath"
-        default: return "brain"
+        default: return "brain.head.profile.fill"
         }
     }
 
     var body: some View {
         HStack(spacing: 0) {
             Image(systemName: statusIcon)
-                .font(.system(size: 12))
+                .font(.system(size: 13))
                 .foregroundStyle(statusColor)
+                .shadow(color: statusColor.opacity(0.3), radius: 3)
                 .frame(width: 30, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -147,11 +166,11 @@ struct FixRow: View {
                     if event.aiGenerated {
                         Text("AI")
                             .font(.system(size: 8, weight: .bold))
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Theme.accentAI.opacity(0.15))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Theme.accentAIDim)
                             .foregroundStyle(Theme.accentAI)
-                            .clipShape(Capsule())
+                            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                     }
                 }
                 if isHovered, let detail = event.detail {
@@ -175,8 +194,8 @@ struct FixRow: View {
                 .frame(width: 80, alignment: .trailing)
         }
         .padding(.horizontal, Theme.paddingLG)
-        .padding(.vertical, Theme.paddingSM)
-        .background(isHovered ? Theme.cardBorder.opacity(0.3) : Color.clear)
+        .padding(.vertical, 9)
+        .background(isHovered ? Theme.cardBorder.opacity(0.2) : Color.clear)
         .onHover { isHovered = $0 }
         .animation(.easeInOut(duration: 0.15), value: isHovered)
     }

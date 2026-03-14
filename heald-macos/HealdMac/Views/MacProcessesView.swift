@@ -33,10 +33,13 @@ struct MacProcessesView: View {
                     }
                     .frame(width: 200)
                 } else if let machine = currentMachine {
-                    HStack(spacing: 6) {
-                        Circle().fill(Theme.statusColor(machine.status)).frame(width: 7, height: 7)
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Theme.statusColor(machine.status))
+                            .frame(width: 7, height: 7)
+                            .shadow(color: Theme.statusColor(machine.status).opacity(0.5), radius: 3)
                         Text(machine.hostname)
-                            .font(.subheadline.weight(.medium))
+                            .font(.system(.subheadline, design: .default, weight: .medium))
                             .foregroundStyle(Theme.textPrimary)
                     }
                 }
@@ -52,13 +55,14 @@ struct MacProcessesView: View {
             }
             .padding(.horizontal, Theme.paddingXL)
             .padding(.vertical, Theme.paddingMD)
+            .background(Theme.surfacePrimary)
 
-            Divider().background(Theme.cardBorder)
+            Rectangle().fill(Theme.cardBorder).frame(height: 0.5)
 
             if processes.isEmpty {
                 Spacer()
                 VStack(spacing: Theme.paddingMD) {
-                    Image(systemName: "cpu")
+                    Image(systemName: "cpu.fill")
                         .font(.system(size: 36))
                         .foregroundStyle(Theme.textTertiary)
                     Text("No process data")
@@ -72,25 +76,25 @@ struct MacProcessesView: View {
                     // Header
                     HStack(spacing: 0) {
                         Text("#").frame(width: 30, alignment: .leading)
-                        Text("Process").frame(maxWidth: .infinity, alignment: .leading)
+                        Text("PROCESS").frame(maxWidth: .infinity, alignment: .leading)
                         Text("PID").frame(width: 60, alignment: .trailing)
                         Text("CPU").frame(width: 80, alignment: .trailing)
                         Text("RAM").frame(width: 80, alignment: .trailing)
-                        Text("Type").frame(width: 70, alignment: .trailing)
+                        Text("TYPE").frame(width: 70, alignment: .trailing)
                     }
-                    .font(.caption.weight(.semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
                     .padding(.horizontal, Theme.paddingXL)
-                    .padding(.vertical, Theme.paddingSM)
-                    .background(Theme.cardBackground)
+                    .padding(.vertical, 10)
+                    .background(Theme.surfacePrimary)
 
-                    Divider().background(Theme.cardBorder)
+                    Rectangle().fill(Theme.cardBorder).frame(height: 0.5)
 
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(Array(processes.enumerated()), id: \.element.id) { idx, proc in
                                 ProcTableRow(process: proc, rank: idx + 1, sortMode: sortMode)
-                                Divider().background(Theme.cardBorder)
+                                Rectangle().fill(Theme.cardBorder.opacity(0.4)).frame(height: 0.5)
                             }
                         }
                     }
@@ -118,11 +122,22 @@ private struct ProcTableRow: View {
                 .foregroundStyle(rankColor)
                 .frame(width: 30, alignment: .leading)
 
-            Text(process.name)
-                .font(.system(.subheadline, design: .monospaced))
-                .foregroundStyle(Theme.textPrimary)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 6) {
+                Text(process.name)
+                    .font(.system(.subheadline, design: .monospaced))
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
+                if process.system {
+                    Text("SYS")
+                        .font(.system(size: 8, weight: .bold))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Theme.accentAI.opacity(0.1))
+                        .foregroundStyle(Theme.accentAI)
+                        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Text("\(process.pid)")
                 .font(.caption.monospacedDigit())
@@ -145,8 +160,8 @@ private struct ProcTableRow: View {
                 .frame(width: 70, alignment: .trailing)
         }
         .padding(.horizontal, Theme.paddingXL)
-        .padding(.vertical, 7)
-        .background(isHovered ? Theme.cardBorder.opacity(0.3) : Color.clear)
+        .padding(.vertical, 8)
+        .background(isHovered ? Theme.cardBorder.opacity(0.2) : Color.clear)
         .onHover { isHovered = $0 }
     }
 

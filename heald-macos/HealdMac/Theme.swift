@@ -1,24 +1,38 @@
 import SwiftUI
 
 enum Theme {
-    static let background = Color.black
-    static let cardBackground = Color(hex: "1C1C1E")
-    static let cardBorder = Color(hex: "2C2C2E")
-    static let accent = Color(hex: "00E5A0")
-    static let accentAI = Color(hex: "00B4D8")
-    static let warning = Color(hex: "FFD60A")
-    static let critical = Color(hex: "FF453A")
-    static let success = Color(hex: "30D158")
-    static let textPrimary = Color.white
-    static let textSecondary = Color(hex: "8E8E93")
-    static let textTertiary = Color(hex: "636366")
+    // Deep dark backgrounds
+    static let background = Color(hex: "08090E")
+    static let surfacePrimary = Color(hex: "0F1117")
+    static let cardBackground = Color(hex: "13151C")
+    static let cardBorder = Color(hex: "1E2030")
+    static let cardBorderHover = Color(hex: "2A2D42")
 
+    // Accent palette — cool cyan/teal
+    static let accent = Color(hex: "38F8C2")
+    static let accentDim = Color(hex: "38F8C2").opacity(0.15)
+    static let accentAI = Color(hex: "6C8EFF")
+    static let accentAIDim = Color(hex: "6C8EFF").opacity(0.15)
+
+    // Semantic colors
+    static let warning = Color(hex: "FFB224")
+    static let critical = Color(hex: "F5424E")
+    static let success = Color(hex: "38F8C2")
+
+    // Text hierarchy
+    static let textPrimary = Color(hex: "E8EAF0")
+    static let textSecondary = Color(hex: "7B7F96")
+    static let textTertiary = Color(hex: "464A5E")
+
+    // Spacing
     static let paddingSM: CGFloat = 8
     static let paddingMD: CGFloat = 12
     static let paddingLG: CGFloat = 16
     static let paddingXL: CGFloat = 24
-    static let cornerRadius: CGFloat = 10
-    static let cornerRadiusSM: CGFloat = 6
+
+    // Radii
+    static let cornerRadius: CGFloat = 12
+    static let cornerRadiusSM: CGFloat = 8
 
     static func statusColor(_ level: StatusLevel) -> Color {
         switch level {
@@ -27,6 +41,11 @@ enum Theme {
         case .critical: return critical
         case .offline: return textTertiary
         }
+    }
+
+    // Glow shadow for accent highlights
+    static func glowShadow(_ color: Color, radius: CGFloat = 12) -> some View {
+        color.opacity(0.25).blur(radius: radius)
     }
 }
 
@@ -59,20 +78,30 @@ extension Color {
 }
 
 struct CardStyle: ViewModifier {
+    var glow: Color? = nil
+
     func body(content: Content) -> some View {
         content
             .padding(Theme.paddingLG)
             .background(Theme.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: Theme.cornerRadius)
-                    .stroke(Theme.cardBorder, lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Theme.cardBorder.opacity(0.8), Theme.cardBorder.opacity(0.3)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.5
+                    )
             )
+            .shadow(color: (glow ?? .clear).opacity(0.08), radius: 16, x: 0, y: 4)
     }
 }
 
 extension View {
-    func cardStyle() -> some View {
-        modifier(CardStyle())
+    func cardStyle(glow: Color? = nil) -> some View {
+        modifier(CardStyle(glow: glow))
     }
 }

@@ -6,9 +6,9 @@ struct MacDashboardView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: Theme.paddingLG) {
+            VStack(spacing: 20) {
                 // Status Bar
-                HStack(spacing: Theme.paddingLG) {
+                HStack(spacing: 20) {
                     StatusCounter(count: appState.healthyCount, label: "Healthy", color: Theme.success)
                     StatusCounter(count: appState.warningCount, label: "Warning", color: Theme.warning)
                     StatusCounter(count: appState.criticalCount, label: "Critical", color: Theme.critical)
@@ -18,13 +18,16 @@ struct MacDashboardView: View {
 
                     VStack(alignment: .trailing, spacing: 2) {
                         Text("\(appState.machines.count) machines")
-                            .font(.subheadline.weight(.medium))
+                            .font(.system(.subheadline, design: .rounded, weight: .medium))
                             .foregroundStyle(Theme.textPrimary)
                         Text("\(appState.events.count) events")
                             .font(.caption)
                             .foregroundStyle(Theme.textTertiary)
                     }
                 }
+                .padding(Theme.paddingLG)
+                .background(Theme.surfacePrimary)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
 
                 // Machine Grid
                 LazyVGrid(columns: [
@@ -47,14 +50,27 @@ struct MacDashboardView: View {
                 // Recent Activity
                 if !appState.events.isEmpty {
                     VStack(alignment: .leading, spacing: Theme.paddingMD) {
-                        Text("Recent Activity")
-                            .font(.headline)
-                            .foregroundStyle(Theme.textPrimary)
+                        HStack {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.accentAI)
+                            Text("Recent Activity")
+                                .font(.system(.headline, design: .rounded))
+                                .foregroundStyle(Theme.textPrimary)
+                            Spacer()
+                            Text("\(appState.events.count)")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(Theme.textTertiary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Theme.cardBorder)
+                                .clipShape(Capsule())
+                        }
 
                         ForEach(appState.events.prefix(8)) { event in
                             MacEventRow(event: event)
                             if event.id != appState.events.prefix(8).last?.id {
-                                Divider().background(Theme.cardBorder)
+                                Divider().background(Theme.cardBorder.opacity(0.5))
                             }
                         }
                     }
@@ -63,6 +79,7 @@ struct MacDashboardView: View {
             }
             .padding(Theme.paddingXL)
         }
+        .background(Theme.background)
     }
 
     private func statusPriority(_ status: StatusLevel) -> Int {
@@ -83,10 +100,16 @@ struct StatusCounter: View {
     let color: Color
 
     var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(count > 0 ? color : Theme.textTertiary)
-                .frame(width: 10, height: 10)
+        HStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(count > 0 ? color.opacity(0.15) : Theme.cardBorder.opacity(0.3))
+                    .frame(width: 28, height: 28)
+                Circle()
+                    .fill(count > 0 ? color : Theme.textTertiary)
+                    .frame(width: 8, height: 8)
+                    .shadow(color: count > 0 ? color.opacity(0.6) : .clear, radius: 4)
+            }
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(count)")
                     .font(.system(.title3, design: .rounded, weight: .bold))
@@ -104,13 +127,14 @@ struct StatusCounter: View {
 struct MacMachineCard: View {
     let machine: Machine
     let history: [MetricSnapshot]?
+    @State private var isHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.paddingMD) {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(machine.hostname)
-                        .font(.headline)
+                        .font(.system(.headline, design: .rounded))
                         .foregroundStyle(Theme.textPrimary)
                     Text(machine.lastSeenFormatted)
                         .font(.caption)
@@ -132,7 +156,14 @@ struct MacMachineCard: View {
                 MiniChart(data: history.suffix(30).map { $0.cpuOverall }, color: Theme.accent, height: 36)
             }
         }
-        .cardStyle()
+        .cardStyle(glow: Theme.statusColor(machine.status))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                .stroke(isHovered ? Theme.cardBorderHover : .clear, lineWidth: 0.5)
+        )
+        .scaleEffect(isHovered ? 1.01 : 1.0)
+        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -144,8 +175,9 @@ struct MetricGauge: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.caption2)
+                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(Theme.textTertiary)
+                .textCase(.uppercase)
             Text(text)
                 .font(.system(.subheadline, design: .rounded, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
@@ -153,7 +185,16 @@ struct MetricGauge: View {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(Theme.cardBorder).frame(height: 3)
-                        Capsule().fill(gaugeColor(value)).frame(width: geo.size.width * min(value, 1.0), height: 3)
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [gaugeColor(value), gaugeColor(value).opacity(0.6)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: geo.size.width * min(value, 1.0), height: 3)
+                            .shadow(color: gaugeColor(value).opacity(0.3), radius: 3, y: 1)
                     }
                 }
                 .frame(height: 3)
@@ -172,16 +213,23 @@ struct StatusPill: View {
     let status: StatusLevel
 
     var body: some View {
-        HStack(spacing: 4) {
-            Circle().fill(Theme.statusColor(status)).frame(width: 6, height: 6)
+        HStack(spacing: 5) {
+            Circle()
+                .fill(Theme.statusColor(status))
+                .frame(width: 6, height: 6)
+                .shadow(color: Theme.statusColor(status).opacity(0.5), radius: 3)
             Text(status.rawValue.capitalized)
-                .font(.caption2.weight(.medium))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(Theme.statusColor(status))
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Theme.statusColor(status).opacity(0.12))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Theme.statusColor(status).opacity(0.1))
         .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .stroke(Theme.statusColor(status).opacity(0.2), lineWidth: 0.5)
+        )
     }
 }
 
@@ -206,6 +254,7 @@ struct MiniChart: View {
                 }
             }
             .stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            .shadow(color: color.opacity(0.4), radius: 4, y: 2)
 
             Path { path in
                 for (index, value) in data.enumerated() {
@@ -221,7 +270,7 @@ struct MiniChart: View {
                 path.addLine(to: CGPoint(x: CGFloat(data.count - 1) * step, y: geo.size.height))
                 path.closeSubpath()
             }
-            .fill(LinearGradient(colors: [color.opacity(0.3), color.opacity(0.0)], startPoint: .top, endPoint: .bottom))
+            .fill(LinearGradient(colors: [color.opacity(0.2), color.opacity(0.0)], startPoint: .top, endPoint: .bottom))
         }
         .frame(height: height)
     }
@@ -231,6 +280,7 @@ struct MiniChart: View {
 
 struct MacEventRow: View {
     let event: ActivityEvent
+    @State private var isHovered = false
 
     private var iconColor: Color {
         switch event.category {
@@ -245,10 +295,14 @@ struct MacEventRow: View {
 
     var body: some View {
         HStack(spacing: Theme.paddingMD) {
-            Image(systemName: event.icon)
-                .font(.system(size: 12))
-                .foregroundStyle(iconColor)
-                .frame(width: 20)
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(iconColor.opacity(0.1))
+                    .frame(width: 26, height: 26)
+                Image(systemName: event.icon)
+                    .font(.system(size: 11))
+                    .foregroundStyle(iconColor)
+            }
 
             Text(event.summary)
                 .font(.subheadline)
@@ -260,18 +314,18 @@ struct MacEventRow: View {
             if event.aiGenerated {
                 Text("AI")
                     .font(.system(size: 9, weight: .bold))
-                    .padding(.horizontal, 5)
+                    .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Theme.accentAI.opacity(0.15))
+                    .background(Theme.accentAIDim)
                     .foregroundStyle(Theme.accentAI)
                     .clipShape(Capsule())
             }
 
             Text(event.category.label)
-                .font(.caption2)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(iconColor.opacity(0.1))
+                .font(.system(size: 10, weight: .medium))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(iconColor.opacity(0.08))
                 .foregroundStyle(iconColor)
                 .clipShape(Capsule())
 
@@ -281,5 +335,9 @@ struct MacEventRow: View {
                 .frame(width: 60, alignment: .trailing)
         }
         .padding(.vertical, 4)
+        .padding(.horizontal, 4)
+        .background(isHovered ? Theme.cardBorder.opacity(0.2) : .clear)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .onHover { isHovered = $0 }
     }
 }

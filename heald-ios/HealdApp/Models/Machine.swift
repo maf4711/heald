@@ -166,4 +166,10 @@ struct MetricSnapshot: Codable, Identifiable {
     let timestamp: String
     let cpuOverall: Double
     let ramUsedGB: Double
+
+    enum CodingKeys: String, CodingKey {
+        case timestamp
+        case cpuOverall = "cpu"
+        case ramUsedGB
+    }
 }
