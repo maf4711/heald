@@ -10,6 +10,7 @@ actor MetricsStore {
     private(set) var uptime: UptimeSnapshot = .empty
     private(set) var thermal: ThermalSnapshot = .empty
     private(set) var benchmark: BenchmarkSnapshot = .empty
+    private(set) var icloud: ICloudSnapshot = .empty
 
     func updateCPU(_ snapshot: CPUSnapshot) { cpu = snapshot }
     func updateRAM(_ snapshot: RAMSnapshot) { ram = snapshot }
@@ -20,6 +21,7 @@ actor MetricsStore {
     func updateUptime(_ snapshot: UptimeSnapshot) { uptime = snapshot }
     func updateThermal(_ snapshot: ThermalSnapshot) { thermal = snapshot }
     func updateBenchmark(_ snapshot: BenchmarkSnapshot) { benchmark = snapshot }
+    func updateICloud(_ snapshot: ICloudSnapshot) { icloud = snapshot }
 
     // --- Swap Spike Detection (MON-07) ---
     // Rate-of-change detection: fires when BOTH conditions met:
