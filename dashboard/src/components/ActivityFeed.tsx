@@ -20,6 +20,12 @@ const typeColors: Record<string, string> = {
   healing_attempt: "#a855f7",
   daemon_started: "#22c55e",
   daemon_stopped: "#888",
+  icloud_sync_degraded: "#eab308",
+  icloud_daemon_down: "#ef4444",
+  spotlight_fix: "#3b82f6",
+  retention_purge: "#555",
+  maintenance_started: "#a855f7",
+  maintenance_completed: "#22c55e",
 };
 
 export function ActivityFeed({ events }: { events: Event[] }) {

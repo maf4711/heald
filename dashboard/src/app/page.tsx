@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { MachineCard } from "@/components/MachineCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
+import { FleetBar } from "@/components/FleetBar";
 
 interface Machine {
   machineId: string;
@@ -15,6 +16,22 @@ interface Machine {
     topCPU: { pid: number; name: string; cpuPercent: number; ramMB: number; system: boolean }[];
     topRAM: { pid: number; name: string; cpuPercent: number; ramMB: number; system: boolean }[];
   };
+  icloud?: {
+    isEnabled: boolean;
+    optimizeStorage: boolean;
+    localFiles: number;
+    cloudFiles: number;
+    syncPercent: number;
+    directories: number;
+    evictedDirs: string[];
+    conflicts: number;
+    docsSizeGB: number;
+    diskFreeGB: number;
+    birdRunning: boolean;
+  };
+  battery?: { cycleCount: number; maxCapacityPercent: number; currentCharge: number; isCharging: boolean; condition: string; temperature: number | null };
+  uptime?: { systemSeconds: number; daemonSeconds: number; systemFormatted: string };
+  thermal?: string;
   history: { timestamp: string; cpu: number; ramUsedGB: number }[];
 }
 
@@ -26,38 +43,67 @@ interface Event {
   aiGenerated: boolean;
 }
 
+type SortKey = "name" | "cpu" | "sync" | "lastSeen" | "issues";
+
 export default function Dashboard() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortKey>("name");
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [mRes, eRes] = await Promise.all([fetch("/api/machines"), fetch("/api/events")]);
-        if (mRes.ok) {
-          const mData = await mRes.json();
-          setMachines(mData.machines);
-        }
-        if (eRes.ok) {
-          const eData = await eRes.json();
-          setEvents(eData.events);
-        }
+        if (mRes.ok) setMachines((await mRes.json()).machines);
+        if (eRes.ok) setEvents((await eRes.json()).events);
       } catch { /* retry next cycle */ }
     };
-
     fetchData();
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, []);
 
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    let list = machines;
+    if (q) list = list.filter((m) => m.hostname.toLowerCase().includes(q) || m.machineId.toLowerCase().includes(q));
+
+    list = [...list].sort((a, b) => {
+      switch (sort) {
+        case "cpu": return (b.cpu?.overall ?? 0) - (a.cpu?.overall ?? 0);
+        case "sync": return (a.icloud?.syncPercent ?? 100) - (b.icloud?.syncPercent ?? 100);
+        case "lastSeen": return new Date(a.lastSeen).getTime() - new Date(b.lastSeen).getTime();
+        case "issues": {
+          const ai = (a.icloud?.cloudFiles ?? 0) + (a.icloud?.conflicts ?? 0) + (a.icloud?.evictedDirs?.length ?? 0);
+          const bi = (b.icloud?.cloudFiles ?? 0) + (b.icloud?.conflicts ?? 0) + (b.icloud?.evictedDirs?.length ?? 0);
+          return bi - ai;
+        }
+        default: return a.hostname.localeCompare(b.hostname);
+      }
+    });
+    return list;
+  }, [machines, search, sort]);
+
+  const sortBtns: { key: SortKey; label: string }[] = [
+    { key: "name", label: "Name" },
+    { key: "cpu", label: "CPU" },
+    { key: "sync", label: "iCloud Sync" },
+    { key: "lastSeen", label: "Zuletzt gesehen" },
+    { key: "issues", label: "Probleme" },
+  ];
+
   return (
-    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 16px" }}>
-      <header style={{ marginBottom: 32, display: "flex", alignItems: "center", gap: 12 }}>
+    <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 16px" }}>
+      <header style={{ marginBottom: 24, display: "flex", alignItems: "center", gap: 12 }}>
         <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0 }}>heald</h1>
         <span style={{ fontSize: 14, color: "#888" }}>
           {machines.length} machine{machines.length !== 1 ? "s" : ""} connected
         </span>
+        <span style={{ marginLeft: "auto", fontSize: 11, color: "#555" }}>auto-refresh 5s</span>
       </header>
+
+      <FleetBar machines={machines} />
 
       {machines.length === 0 ? (
         <div style={{ textAlign: "center", padding: 64, color: "#666" }}>
@@ -65,11 +111,47 @@ export default function Dashboard() {
           <p style={{ fontSize: 14 }}>Start the heald daemon on a Mac to see live metrics here.</p>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(540, 1fr))", gap: 16 }}>
-          {machines.map((m) => (
-            <MachineCard key={m.machineId} machine={m} />
-          ))}
-        </div>
+        <>
+          {/* Search + Sort */}
+          <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+            <input
+              type="text"
+              placeholder="Maschine suchen..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                padding: "8px 14px", background: "#1a1a1a", border: "1px solid #333",
+                borderRadius: 8, color: "#eee", fontSize: 14, flex: 1, minWidth: 200, outline: "none",
+              }}
+            />
+            <div style={{ display: "flex", gap: 4 }}>
+              {sortBtns.map((b) => (
+                <button
+                  key={b.key}
+                  onClick={() => setSort(b.key)}
+                  style={{
+                    padding: "5px 12px", borderRadius: 16, border: "1px solid #333", cursor: "pointer",
+                    fontSize: 12, transition: "all .2s",
+                    background: sort === b.key ? "#2563eb" : "#222",
+                    color: sort === b.key ? "#fff" : "#888",
+                    borderColor: sort === b.key ? "#2563eb" : "#333",
+                  }}
+                >
+                  {b.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(480px, 1fr))", gap: 16 }}>
+            {filtered.map((m) => (
+              <MachineCard key={m.machineId} machine={m} />
+            ))}
+          </div>
+          {filtered.length === 0 && search && (
+            <p style={{ textAlign: "center", color: "#666", padding: 32 }}>Keine Maschine gefunden.</p>
+          )}
+        </>
       )}
 
       <section style={{ marginTop: 40 }}>
