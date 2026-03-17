@@ -43,6 +43,19 @@ export interface MachineMetrics {
   };
   thermal?: string;
   benchmark?: BenchmarkResult;
+  icloud?: {
+    isEnabled: boolean;
+    optimizeStorage: boolean;
+    localFiles: number;
+    cloudFiles: number;
+    syncPercent: number;
+    directories: number;
+    evictedDirs: string[];
+    conflicts: number;
+    docsSizeGB: number;
+    diskFreeGB: number;
+    birdRunning: boolean;
+  };
 }
 
 export interface ProcessEntry {

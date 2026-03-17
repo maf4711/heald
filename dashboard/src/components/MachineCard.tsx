@@ -13,6 +13,19 @@ interface Machine {
     topCPU: { pid: number; name: string; cpuPercent: number; ramMB: number; system: boolean }[];
     topRAM: { pid: number; name: string; cpuPercent: number; ramMB: number; system: boolean }[];
   };
+  icloud?: {
+    isEnabled: boolean;
+    optimizeStorage: boolean;
+    localFiles: number;
+    cloudFiles: number;
+    syncPercent: number;
+    directories: number;
+    evictedDirs: string[];
+    conflicts: number;
+    docsSizeGB: number;
+    diskFreeGB: number;
+    birdRunning: boolean;
+  };
   history: { timestamp: string; cpu: number; ramUsedGB: number }[];
 }
 
@@ -28,10 +41,11 @@ function healthColor(machine: Machine): string {
   const rootVol = disk?.volumes?.find((v) => v.mountPoint === "/");
   if (rootVol && (rootVol.totalGB - rootVol.freeGB) / rootVol.totalGB > 0.9) return "#ef4444";
 
-  // Yellow: pressure warning, swap > 2GB, disk >80%
+  // Yellow: pressure warning, swap > 2GB, disk >80%, iCloud sync degraded
   if (pressureLevel >= 2) return "#eab308";
   if (swapUsedMB > 2048) return "#eab308";
   if (rootVol && (rootVol.totalGB - rootVol.freeGB) / rootVol.totalGB > 0.8) return "#eab308";
+  if (machine.icloud?.syncPercent !== undefined && machine.icloud.syncPercent < 90) return "#eab308";
 
   return "#22c55e"; // Green
 }
@@ -83,6 +97,23 @@ export function MachineCard({ machine }: { machine: Machine }) {
               <Line type="monotone" dataKey="ram" stroke="#a855f7" strokeWidth={1.5} dot={false} name="RAM GB" />
             </LineChart>
           </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* iCloud Sync */}
+      {machine.icloud && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
+          <MetricBox
+            label="iCloud Sync"
+            value={`${machine.icloud.syncPercent.toFixed(0)}%`}
+            sub={`${machine.icloud.localFiles} local / ${machine.icloud.cloudFiles} cloud`}
+          />
+          <MetricBox label="Docs" value={`${machine.icloud.docsSizeGB.toFixed(0)} GB`} sub={`${machine.icloud.directories} dirs`} />
+          <MetricBox
+            label="Status"
+            value={machine.icloud.birdRunning ? (machine.icloud.conflicts > 0 ? `${machine.icloud.conflicts} conflicts` : "OK") : "bird down"}
+            sub={machine.icloud.evictedDirs.length > 0 ? `${machine.icloud.evictedDirs.length} evicted` : machine.icloud.optimizeStorage ? "optimize on" : undefined}
+          />
         </div>
       )}
 
