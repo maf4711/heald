@@ -1,10 +1,26 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { MachineCard } from "@/components/MachineCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { FleetBar } from "@/components/FleetBar";
-import { InstallHero } from "@/components/InstallHero";
+import { InstallPanel } from "@/components/InstallPanel";
+
+/* ── meradOS tokens ── */
+const t = {
+  bg: "#050508",
+  surface: "#0a0a0f",
+  border: "rgba(255, 255, 255, 0.04)",
+  text1: "rgba(255, 255, 255, 0.88)",
+  text2: "rgba(255, 255, 255, 0.45)",
+  text3: "rgba(255, 255, 255, 0.2)",
+  brand400: "#38bdf8",
+  brand500: "#0ea5e9",
+  success: "#34d399",
+  warning: "#f5a623",
+  error: "#ef4444",
+  radius: "12px",
+};
 
 interface Machine {
   machineId: string;
@@ -18,17 +34,9 @@ interface Machine {
     topRAM: { pid: number; name: string; cpuPercent: number; ramMB: number; system: boolean }[];
   };
   icloud?: {
-    isEnabled: boolean;
-    optimizeStorage: boolean;
-    localFiles: number;
-    cloudFiles: number;
-    syncPercent: number;
-    directories: number;
-    evictedDirs: string[];
-    conflicts: number;
-    docsSizeGB: number;
-    diskFreeGB: number;
-    birdRunning: boolean;
+    isEnabled: boolean; optimizeStorage: boolean; localFiles: number; cloudFiles: number;
+    syncPercent: number; directories: number; evictedDirs: string[]; conflicts: number;
+    docsSizeGB: number; diskFreeGB: number; birdRunning: boolean;
   };
   battery?: { cycleCount: number; maxCapacityPercent: number; currentCharge: number; isCharging: boolean; condition: string; temperature: number | null };
   uptime?: { systemSeconds: number; daemonSeconds: number; systemFormatted: string };
@@ -70,7 +78,6 @@ export default function Dashboard() {
     const q = search.toLowerCase();
     let list = machines;
     if (q) list = list.filter((m) => m.hostname.toLowerCase().includes(q) || m.machineId.toLowerCase().includes(q));
-
     list = [...list].sort((a, b) => {
       switch (sort) {
         case "cpu": return (b.cpu?.overall ?? 0) - (a.cpu?.overall ?? 0);
@@ -90,43 +97,58 @@ export default function Dashboard() {
   const sortBtns: { key: SortKey; label: string }[] = [
     { key: "name", label: "Name" },
     { key: "cpu", label: "CPU" },
-    { key: "sync", label: "iCloud Sync" },
-    { key: "lastSeen", label: "Zuletzt gesehen" },
-    { key: "issues", label: "Probleme" },
+    { key: "sync", label: "iCloud" },
+    { key: "lastSeen", label: "Last Seen" },
+    { key: "issues", label: "Issues" },
   ];
 
   return (
     <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 16px" }}>
+      {/* Header */}
       <header style={{ marginBottom: 24, display: "flex", alignItems: "center", gap: 12 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0 }}>heald</h1>
-        <span style={{ fontSize: 14, color: "#888" }}>
-          {machines.length} machine{machines.length !== 1 ? "s" : ""} connected
+        <h1 style={{
+          fontSize: 28, fontWeight: 200, margin: 0, letterSpacing: "0.02em",
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', Inter, sans-serif",
+        }}>
+          heald
+        </h1>
+        <span style={{ fontSize: 13, color: t.text2 }}>
+          {machines.length} machine{machines.length !== 1 ? "s" : ""}
         </span>
-        <span style={{ marginLeft: "auto", fontSize: 11, color: "#555" }}>auto-refresh 5s</span>
+        <span style={{ marginLeft: "auto", fontSize: 11, color: t.text3 }}>auto-refresh 5s</span>
       </header>
+
+      {/* Install Panel (collapsible) */}
+      <InstallPanel />
 
       <FleetBar machines={machines} />
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: 64, color: "#666" }}>
-          <div style={{ fontSize: 20, marginBottom: 8 }}>Connecting to fleet...</div>
-          <div style={{ fontSize: 13 }}>Waiting for daemon metrics (auto-refresh every 5s)</div>
+        <div style={{ textAlign: "center", padding: 64, color: t.text2 }}>
+          <div style={{ fontSize: 18, fontWeight: 500, letterSpacing: "-0.01em", marginBottom: 8 }}>Connecting to fleet...</div>
+          <div style={{ fontSize: 13, color: t.text3 }}>Waiting for daemon metrics</div>
         </div>
       ) : machines.length === 0 ? (
-        <InstallHero />
+        <div style={{ textAlign: "center", padding: 64, color: t.text2 }}>
+          <div style={{ fontSize: 18, fontWeight: 500, marginBottom: 8 }}>No machines connected yet.</div>
+          <div style={{ fontSize: 13, color: t.text3 }}>Open the install panel above to get started.</div>
+        </div>
       ) : (
         <>
           {/* Search + Sort */}
           <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
             <input
               type="text"
-              placeholder="Maschine suchen..."
+              placeholder="Search machines..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
-                padding: "8px 14px", background: "#1a1a1a", border: "1px solid #333",
-                borderRadius: 8, color: "#eee", fontSize: 14, flex: 1, minWidth: 200, outline: "none",
+                padding: "8px 14px", background: t.surface, border: `1px solid ${t.border}`,
+                borderRadius: 8, color: t.text1, fontSize: 14, flex: 1, minWidth: 200, outline: "none",
+                transition: "border-color 200ms cubic-bezier(0.25, 1, 0.5, 1)",
               }}
+              onFocus={(e) => (e.target.style.borderColor = t.brand400 + "44")}
+              onBlur={(e) => (e.target.style.borderColor = t.border)}
             />
             <div style={{ display: "flex", gap: 4 }}>
               {sortBtns.map((b) => (
@@ -134,11 +156,12 @@ export default function Dashboard() {
                   key={b.key}
                   onClick={() => setSort(b.key)}
                   style={{
-                    padding: "5px 12px", borderRadius: 16, border: "1px solid #333", cursor: "pointer",
-                    fontSize: 12, transition: "all .2s",
-                    background: sort === b.key ? "#2563eb" : "#222",
-                    color: sort === b.key ? "#fff" : "#888",
-                    borderColor: sort === b.key ? "#2563eb" : "#333",
+                    padding: "5px 12px", borderRadius: 16, cursor: "pointer",
+                    fontSize: 12, fontWeight: 500, letterSpacing: "0.02em",
+                    transition: "all 200ms cubic-bezier(0.25, 1, 0.5, 1)",
+                    background: sort === b.key ? t.brand400 + "18" : t.surface,
+                    color: sort === b.key ? t.brand400 : t.text2,
+                    border: `1px solid ${sort === b.key ? t.brand400 + "33" : t.border}`,
                   }}
                 >
                   {b.label}
@@ -153,34 +176,27 @@ export default function Dashboard() {
             ))}
           </div>
           {filtered.length === 0 && search && (
-            <p style={{ textAlign: "center", color: "#666", padding: 32 }}>Keine Maschine gefunden.</p>
+            <p style={{ textAlign: "center", color: t.text3, padding: 32 }}>No machines match.</p>
           )}
         </>
       )}
 
       <section style={{ marginTop: 40 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>Activity Feed</h2>
+        <h2 style={{ fontSize: 18, fontWeight: 500, letterSpacing: "-0.01em", marginBottom: 16, color: t.text1 }}>Activity</h2>
         <ActivityFeed events={events} />
       </section>
 
-      {/* Install footer */}
+      {/* Footer */}
       <footer style={{
-        marginTop: 48, padding: "24px 0", borderTop: "1px solid #222",
-        textAlign: "center", color: "#555", fontSize: 12,
+        marginTop: 48, padding: "20px 0", borderTop: `1px solid ${t.border}`,
+        textAlign: "center", color: t.text3, fontSize: 11,
       }}>
-        <span style={{ color: "#888" }}>Add more Macs: </span>
-        <code style={{
-          background: "#1a1a1a", padding: "4px 10px", borderRadius: 6,
-          border: "1px solid #333", fontSize: 12, color: "#22c55e",
-        }}>
-          brew install maf4711/heald/heald
-        </code>
-        <span style={{ margin: "0 8px", color: "#333" }}>|</span>
-        <a href="https://github.com/maf4711/heald" target="_blank" rel="noopener" style={{ color: "#3b82f6", textDecoration: "none" }}>
-          GitHub
-        </a>
-        <span style={{ margin: "0 8px", color: "#333" }}>|</span>
+        <a href="https://github.com/maf4711/heald" target="_blank" rel="noopener"
+          style={{ color: t.brand500, textDecoration: "none" }}>GitHub</a>
+        <span style={{ margin: "0 12px", color: t.border }}>|</span>
         <span>heald v1.3.0</span>
+        <span style={{ margin: "0 12px", color: t.border }}>|</span>
+        <span style={{ color: t.text3 }}>meradOS</span>
       </footer>
     </div>
   );

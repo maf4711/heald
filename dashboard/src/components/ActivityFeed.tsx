@@ -1,5 +1,17 @@
 "use client";
 
+const t = {
+  surface: "#0a0a0f",
+  border: "rgba(255, 255, 255, 0.04)",
+  text2: "rgba(255, 255, 255, 0.45)",
+  text3: "rgba(255, 255, 255, 0.2)",
+  success: "#34d399",
+  warning: "#f5a623",
+  error: "#ef4444",
+  info: "#3b82f6",
+  brand400: "#38bdf8",
+};
+
 interface Event {
   timestamp: string;
   machineId: string;
@@ -9,53 +21,59 @@ interface Event {
 }
 
 const typeColors: Record<string, string> = {
-  process_killed: "#ef4444",
-  process_restarted: "#eab308",
-  dns_flushed: "#3b82f6",
-  swap_spike: "#f97316",
-  smart_failure: "#ef4444",
-  crash_detected: "#ef4444",
-  healing_success: "#22c55e",
-  healing_failed: "#ef4444",
-  healing_attempt: "#a855f7",
-  daemon_started: "#22c55e",
-  daemon_stopped: "#888",
-  icloud_sync_degraded: "#eab308",
-  icloud_daemon_down: "#ef4444",
-  spotlight_fix: "#3b82f6",
-  retention_purge: "#555",
-  maintenance_started: "#a855f7",
-  maintenance_completed: "#22c55e",
+  process_killed: t.error,
+  process_restarted: t.warning,
+  dns_flushed: t.info,
+  swap_spike: t.warning,
+  smart_failure: t.error,
+  crash_detected: t.error,
+  healing_success: t.success,
+  healing_failed: t.error,
+  healing_attempt: t.brand400,
+  daemon_started: t.success,
+  daemon_stopped: t.text3,
+  icloud_sync_degraded: t.warning,
+  icloud_daemon_down: t.error,
+  spotlight_fix: t.info,
+  retention_purge: t.text3,
+  maintenance_started: t.brand400,
+  maintenance_completed: t.success,
 };
 
 export function ActivityFeed({ events }: { events: Event[] }) {
   if (events.length === 0) {
-    return <p style={{ color: "#666", fontSize: 14 }}>No activity yet.</p>;
+    return <p style={{ color: t.text3, fontSize: 13 }}>No activity yet.</p>;
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       {events.map((event, i) => {
-        const color = typeColors[event.type] ?? "#888";
+        const color = typeColors[event.type] ?? t.text3;
         const time = new Date(event.timestamp).toLocaleString([], {
           month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",
         });
 
         return (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#1a1a1a", borderRadius: 8, fontSize: 13 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
-            <span style={{ color: "#666", minWidth: 140, fontSize: 11 }}>{time}</span>
-            <span style={{ flex: 1 }}>{event.summary}</span>
-            {/* DASH-05: AI badge */}
+          <div key={i} style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "7px 12px", background: t.surface, borderRadius: 8,
+            fontSize: 12, border: `1px solid ${t.border}`,
+            transition: "border-color 200ms",
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }} />
+            <span style={{ color: t.text3, minWidth: 130, fontSize: 10, fontFamily: "'SF Mono', monospace" }}>{time}</span>
+            <span style={{ flex: 1, color: t.text2 }}>{event.summary}</span>
             {event.aiGenerated && (
               <span style={{
-                background: "#7c3aed", color: "#fff", fontSize: 10, fontWeight: 700,
-                padding: "2px 6px", borderRadius: 4, flexShrink: 0,
+                background: t.brand400 + "18", color: t.brand400, fontSize: 9, fontWeight: 600,
+                padding: "1px 5px", borderRadius: 4, flexShrink: 0, letterSpacing: "0.04em",
               }}>
                 AI
               </span>
             )}
-            <span style={{ color: "#555", fontSize: 11 }}>{event.machineId.slice(0, 8)}</span>
+            <span style={{ color: t.text3, fontSize: 10, fontFamily: "'SF Mono', monospace" }}>
+              {event.machineId.slice(0, 10)}
+            </span>
           </div>
         );
       })}
