@@ -98,6 +98,25 @@ actor MetricsDatabase {
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_proc_ts ON process_metrics(timestamp)")
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bench_ts ON benchmark_results(timestamp)")
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_net_ts ON network_metrics(timestamp)")
+
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS icloud_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    is_enabled INTEGER NOT NULL,
+                    optimize_storage INTEGER NOT NULL,
+                    local_files INTEGER NOT NULL,
+                    cloud_files INTEGER NOT NULL,
+                    sync_percent REAL NOT NULL,
+                    directories INTEGER NOT NULL,
+                    evicted_dirs TEXT NOT NULL,
+                    conflicts INTEGER NOT NULL,
+                    docs_size INTEGER NOT NULL,
+                    disk_free INTEGER NOT NULL,
+                    bird_running INTEGER NOT NULL
+                )
+                """)
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_icloud_ts ON icloud_metrics(timestamp)")
         }
 
         Logger.storage.info("MetricsDatabase opened at \(path)")
@@ -232,6 +251,31 @@ actor MetricsDatabase {
         }
     }
 
+    // MARK: - iCloud
+
+    func insertICloud(_ snapshot: ICloudSnapshot) throws {
+        let ts = ISO8601DateFormatter().string(from: snapshot.timestamp)
+        let encoder = JSONEncoder()
+        let evictedJSON = (try? String(data: encoder.encode(snapshot.evictedDirs), encoding: .utf8)) ?? "[]"
+
+        try dbQueue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO icloud_metrics
+                    (timestamp, is_enabled, optimize_storage, local_files, cloud_files,
+                     sync_percent, directories, evicted_dirs, conflicts, docs_size, disk_free, bird_running)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [ts, snapshot.isEnabled ? 1 : 0, snapshot.optimizeStorage ? 1 : 0,
+                           snapshot.localFiles, snapshot.cloudFiles,
+                           snapshot.syncPercent, snapshot.directories,
+                           evictedJSON, snapshot.conflicts,
+                           snapshot.docsSize, snapshot.diskFree,
+                           snapshot.birdRunning ? 1 : 0]
+            )
+        }
+    }
+
     // MARK: - Retention (LOG-03)
 
     func purgeOldRecords() throws {
@@ -244,6 +288,7 @@ actor MetricsDatabase {
             try db.execute(sql: "DELETE FROM disk_metrics WHERE timestamp < ?", arguments: [cutoffStr])
             try db.execute(sql: "DELETE FROM process_metrics WHERE timestamp < ?", arguments: [cutoffStr])
             try db.execute(sql: "DELETE FROM network_metrics WHERE timestamp < ?", arguments: [cutoffStr])
+            try db.execute(sql: "DELETE FROM icloud_metrics WHERE timestamp < ?", arguments: [cutoffStr])
             // Keep benchmark results for 90 days (long-term trend)
             let benchCutoff = Calendar.current.date(byAdding: .day, value: -90, to: Date())!
             let benchCutoffStr = ISO8601DateFormatter().string(from: benchCutoff)
