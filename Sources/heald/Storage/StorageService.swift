@@ -17,6 +17,7 @@ struct StorageService: Service {
         ))
 
         var retentionCycle = 0
+        var lastICloudTimestamp: Date = .distantPast
 
         while true {
             try await Task.sleep(for: .seconds(10))
@@ -26,7 +27,6 @@ struct StorageService: Service {
             let ram = await store.ram
             let disk = await store.disk
             let processes = await store.processes
-
             let icloud = await store.icloud
 
             do {
@@ -42,8 +42,10 @@ struct StorageService: Service {
                 if processes.timestamp != .distantPast {
                     try await db.insertProcesses(processes)
                 }
-                if icloud.timestamp != .distantPast {
+                // iCloud: only write when collector produced a new snapshot
+                if icloud.timestamp != .distantPast && icloud.timestamp != lastICloudTimestamp {
                     try await db.insertICloud(icloud)
+                    lastICloudTimestamp = icloud.timestamp
                 }
             } catch {
                 Logger.storage.error("StorageService write failed: \(error)")

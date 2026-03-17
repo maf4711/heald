@@ -9,7 +9,7 @@ struct ICloudCollector: Service {
     let store: MetricsStore
     let activityLog: ActivityLog
 
-    private static let interval: Duration = .seconds(300)  // 5 min — iCloud state changes slowly
+    private static let interval: Duration = .seconds(60)   // 1 min — fast enough for dashboard
     static let healBatchSize = 50
 
     func run() async throws {
