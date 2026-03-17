@@ -15,8 +15,7 @@ const t = {
 };
 
 const steps = [
-  { cmd: "brew install maf4711/heald/heald", label: "Install" },
-  { cmd: "$(brew --prefix heald)/install.sh", label: "Start daemon" },
+  { cmd: "curl -sL https://raw.githubusercontent.com/maf4711/heald/main/install.sh | bash", label: "Install + start" },
 ];
 
 export function InstallPanel() {
@@ -49,7 +48,7 @@ export function InstallPanel() {
           transition: "opacity 200ms",
           fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
         }}>
-          brew install maf4711/heald/heald
+          curl -sL .../install.sh | bash
         </code>
       </button>
 
