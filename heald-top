@@ -1,0 +1,62 @@
+#!/bin/bash
+# heald-top — Terminal dashboard for heald fleet monitoring
+# Usage: heald-top [--url URL] [--interval N]
+
+set -u
+
+API_URL="${HEALD_API_URL:-https://heald.merados.com}"
+INTERVAL=5
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --url) API_URL="$2"; shift 2 ;;
+        --interval|-n) INTERVAL="$2"; shift 2 ;;
+        -h|--help) echo "Usage: heald-top [--url URL] [-n INTERVAL]"; exit 0 ;;
+        *) shift ;;
+    esac
+done
+
+MACHINES_URL="${API_URL}/api/machines"
+EVENTS_URL="${API_URL}/api/events?limit=8"
+
+# Find render script next to this script
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RENDER="${SCRIPT_DIR}/heald-top-render.py"
+if [ ! -f "$RENDER" ]; then
+    # Fallback: check brew prefix
+    RENDER="$(brew --prefix heald 2>/dev/null)/heald-top-render.py"
+fi
+if [ ! -f "$RENDER" ]; then
+    echo "Error: heald-top-render.py not found" >&2
+    exit 1
+fi
+
+cleanup() {
+    tput cnorm 2>/dev/null
+    tput rmcup 2>/dev/null
+    rm -f /tmp/.heald-top-m.json /tmp/.heald-top-e.json
+    echo -e "\033[0m"
+    exit 0
+}
+trap cleanup EXIT INT TERM
+
+tput smcup 2>/dev/null
+tput civis 2>/dev/null
+
+while true; do
+    curl -sf --max-time 4 "$MACHINES_URL" > /tmp/.heald-top-m.json 2>/dev/null
+    curl -sf --max-time 4 "$EVENTS_URL" > /tmp/.heald-top-e.json 2>/dev/null
+
+    if [ ! -s /tmp/.heald-top-m.json ]; then
+        tput cup 0 0
+        echo -e "\033[31m\033[1mheald-top: cannot reach ${API_URL}\033[0m"
+    else
+        python3 "$RENDER" "$(tput cols)" "$(tput lines)" "$INTERVAL"
+    fi
+
+    read -rsn1 -t "$INTERVAL" key 2>/dev/null
+    case "$key" in
+        q|Q) break ;;
+        r|R) continue ;;
+    esac
+done
