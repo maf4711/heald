@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { MachineCard } from "@/components/MachineCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { FleetBar } from "@/components/FleetBar";
+import { InstallHero } from "@/components/InstallHero";
 
 interface Machine {
   machineId: string;
@@ -106,10 +107,7 @@ export default function Dashboard() {
       <FleetBar machines={machines} />
 
       {machines.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 64, color: "#666" }}>
-          <p style={{ fontSize: 18 }}>No machines connected yet.</p>
-          <p style={{ fontSize: 14 }}>Start the heald daemon on a Mac to see live metrics here.</p>
-        </div>
+        <InstallHero />
       ) : (
         <>
           {/* Search + Sort */}
@@ -158,6 +156,26 @@ export default function Dashboard() {
         <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>Activity Feed</h2>
         <ActivityFeed events={events} />
       </section>
+
+      {/* Install footer */}
+      <footer style={{
+        marginTop: 48, padding: "24px 0", borderTop: "1px solid #222",
+        textAlign: "center", color: "#555", fontSize: 12,
+      }}>
+        <span style={{ color: "#888" }}>Add more Macs: </span>
+        <code style={{
+          background: "#1a1a1a", padding: "4px 10px", borderRadius: 6,
+          border: "1px solid #333", fontSize: 12, color: "#22c55e",
+        }}>
+          brew install maf4711/heald/heald
+        </code>
+        <span style={{ margin: "0 8px", color: "#333" }}>|</span>
+        <a href="https://github.com/maf4711/heald" target="_blank" rel="noopener" style={{ color: "#3b82f6", textDecoration: "none" }}>
+          GitHub
+        </a>
+        <span style={{ margin: "0 8px", color: "#333" }}>|</span>
+        <span>heald v1.3.0</span>
+      </footer>
     </div>
   );
 }
