@@ -42,11 +42,13 @@ struct HealdService: Service {
         let batteryCollector  = BatteryCollector(store: store)
         let uptimeCollector   = UptimeCollector(store: store)
         let thermalCollector  = ThermalCollector(store: store, activityLog: activityLog)
+        let icloudCollector   = ICloudCollector(store: store, activityLog: activityLog)
         let debugWriter       = DebugStatusWriter(store: store)
 
         let collectorGroup = ServiceGroup(
             services: [cpuCollector, ramCollector, diskCollector, processCollector,
                        networkCollector, batteryCollector, uptimeCollector, thermalCollector,
+                       icloudCollector,
                        debugWriter, storageService, cloudPusher, healingService,
                        healthCheckService, notificationService, maintenanceService],
             logger: .init(label: "com.heald.services")

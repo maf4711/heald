@@ -27,6 +27,8 @@ struct StorageService: Service {
             let disk = await store.disk
             let processes = await store.processes
 
+            let icloud = await store.icloud
+
             do {
                 if cpu.timestamp != .distantPast {
                     try await db.insertCPU(cpu)
@@ -39,6 +41,9 @@ struct StorageService: Service {
                 }
                 if processes.timestamp != .distantPast {
                     try await db.insertProcesses(processes)
+                }
+                if icloud.timestamp != .distantPast {
+                    try await db.insertICloud(icloud)
                 }
             } catch {
                 Logger.storage.error("StorageService write failed: \(error)")

@@ -56,6 +56,7 @@ struct CloudPusher: Service {
         let uptime = await store.uptime
         let thermal = await store.thermal
         let benchmark = await store.benchmark
+        let icloud = await store.icloud
 
         // Decompose into named sub-dicts to avoid Swift type-checker timeout
         let cpuDict: [String: Any] = [
@@ -135,8 +136,26 @@ struct CloudPusher: Service {
             "uptime": uptimeDict,
             "thermal": thermal.thermalState.rawValue,
         ]
+        var icloudDict: [String: Any]? = nil
+        if icloud.timestamp != Date.distantPast {
+            icloudDict = [
+                "isEnabled": icloud.isEnabled,
+                "optimizeStorage": icloud.optimizeStorage,
+                "localFiles": icloud.localFiles,
+                "cloudFiles": icloud.cloudFiles,
+                "syncPercent": round(icloud.syncPercent * 10) / 10,
+                "directories": icloud.directories,
+                "evictedDirs": icloud.evictedDirs,
+                "conflicts": icloud.conflicts,
+                "docsSizeGB": round(Double(icloud.docsSize) / 1_073_741_824 * 100) / 100,
+                "diskFreeGB": round(Double(icloud.diskFree) / 1_073_741_824 * 100) / 100,
+                "birdRunning": icloud.birdRunning,
+            ]
+        }
+
         if let batteryDict { metrics["battery"] = batteryDict }
         if let benchmarkDict { metrics["benchmark"] = benchmarkDict }
+        if let icloudDict { metrics["icloud"] = icloudDict }
 
         return ["metrics": metrics, "events": [] as [[String: Any]]]
     }

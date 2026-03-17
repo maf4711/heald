@@ -138,4 +138,8 @@ enum EventType: String, Codable, Sendable {
 
     // Thermal
     case thermalThrottling = "thermal_throttling"
+
+    // iCloud
+    case icloudSyncDegraded = "icloud_sync_degraded"
+    case icloudDaemonDown = "icloud_daemon_down"
 }
