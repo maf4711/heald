@@ -51,12 +51,13 @@ export default function Dashboard() {
   const [events, setEvents] = useState<Event[]>([]);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("name");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [mRes, eRes] = await Promise.all([fetch("/api/machines"), fetch("/api/events")]);
-        if (mRes.ok) setMachines((await mRes.json()).machines);
+        if (mRes.ok) { setMachines((await mRes.json()).machines); setLoading(false); }
         if (eRes.ok) setEvents((await eRes.json()).events);
       } catch { /* retry next cycle */ }
     };
@@ -106,7 +107,12 @@ export default function Dashboard() {
 
       <FleetBar machines={machines} />
 
-      {machines.length === 0 ? (
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 64, color: "#666" }}>
+          <div style={{ fontSize: 20, marginBottom: 8 }}>Connecting to fleet...</div>
+          <div style={{ fontSize: 13 }}>Waiting for daemon metrics (auto-refresh every 5s)</div>
+        </div>
+      ) : machines.length === 0 ? (
         <InstallHero />
       ) : (
         <>

@@ -86,20 +86,68 @@ export interface ActivityEntry {
   aiGenerated: boolean;
 }
 
-// In-memory maps — resets on cold start (acceptable for MVP)
+// In-memory maps with /tmp file-cache for Vercel cold-start recovery.
+// On cold start, the in-memory store is empty but /tmp may still have data
+// from the previous invocation on the same serverless instance.
+
+import { readFileSync, writeFileSync } from "fs";
+
+const CACHE_FILE = "/tmp/heald-store.json";
+
 const machines = new Map<string, MachineMetrics>();
 const events: ActivityEntry[] = [];
 const metricsHistory = new Map<string, { timestamp: string; cpu: number; ramUsedGB: number }[]>();
 const benchmarkHistory = new Map<string, BenchmarkResult[]>();
 
 const MAX_EVENTS = 1000;
-const MAX_HISTORY_PER_MACHINE = 720; // ~1 hour at 5s intervals
-const MAX_BENCHMARK_HISTORY = 90; // 90 days of daily benchmarks
+const MAX_HISTORY_PER_MACHINE = 720;
+const MAX_BENCHMARK_HISTORY = 90;
+
+// --- Persistence: /tmp file cache ---
+function persistToCache() {
+  try {
+    const data = {
+      machines: Object.fromEntries(machines),
+      events: events.slice(0, 100),
+      history: Object.fromEntries(metricsHistory),
+      benchmarks: Object.fromEntries(benchmarkHistory),
+    };
+    writeFileSync(CACHE_FILE, JSON.stringify(data));
+  } catch { /* best effort */ }
+}
+
+function restoreFromCache() {
+  if (machines.size > 0) return; // already populated
+  try {
+    const raw = readFileSync(CACHE_FILE, "utf-8");
+    const data = JSON.parse(raw);
+    if (data.machines) {
+      for (const [k, v] of Object.entries(data.machines)) {
+        machines.set(k, v as MachineMetrics);
+      }
+    }
+    if (data.events) {
+      events.push(...(data.events as ActivityEntry[]));
+    }
+    if (data.history) {
+      for (const [k, v] of Object.entries(data.history)) {
+        metricsHistory.set(k, v as { timestamp: string; cpu: number; ramUsedGB: number }[]);
+      }
+    }
+    if (data.benchmarks) {
+      for (const [k, v] of Object.entries(data.benchmarks)) {
+        benchmarkHistory.set(k, v as BenchmarkResult[]);
+      }
+    }
+  } catch { /* no cache yet */ }
+}
+
+// Restore on module load
+restoreFromCache();
 
 export function upsertMachine(data: MachineMetrics) {
   machines.set(data.machineId, { ...data, lastSeen: new Date().toISOString() });
 
-  // Append to metrics history
   const history = metricsHistory.get(data.machineId) ?? [];
   history.push({
     timestamp: new Date().toISOString(),
@@ -111,11 +159,9 @@ export function upsertMachine(data: MachineMetrics) {
   }
   metricsHistory.set(data.machineId, history);
 
-  // Track benchmark history
   if (data.benchmark) {
     const benchHistory = benchmarkHistory.get(data.machineId) ?? [];
     const lastBench = benchHistory[benchHistory.length - 1];
-    // Only add if timestamp changed (new benchmark run)
     if (!lastBench || lastBench.timestamp !== data.benchmark.timestamp) {
       benchHistory.push(data.benchmark);
       if (benchHistory.length > MAX_BENCHMARK_HISTORY) {
@@ -124,26 +170,33 @@ export function upsertMachine(data: MachineMetrics) {
       benchmarkHistory.set(data.machineId, benchHistory);
     }
   }
+
+  persistToCache();
 }
 
 export function addEvent(entry: ActivityEntry) {
   events.unshift(entry);
   if (events.length > MAX_EVENTS) events.length = MAX_EVENTS;
+  persistToCache();
 }
 
 export function getMachines(): MachineMetrics[] {
+  restoreFromCache();
   return Array.from(machines.values());
 }
 
 export function getEvents(machineId?: string, limit = 50): ActivityEntry[] {
+  restoreFromCache();
   const filtered = machineId ? events.filter((e) => e.machineId === machineId) : events;
   return filtered.slice(0, limit);
 }
 
 export function getHistory(machineId: string) {
+  restoreFromCache();
   return metricsHistory.get(machineId) ?? [];
 }
 
 export function getBenchmarkHistory(machineId: string) {
+  restoreFromCache();
   return benchmarkHistory.get(machineId) ?? [];
 }
