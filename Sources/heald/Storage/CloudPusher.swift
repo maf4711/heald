@@ -57,6 +57,15 @@ struct CloudPusher: Service {
         let thermal = await store.thermal
         let benchmark = await store.benchmark
         let icloud = await store.icloud
+        let gpu = await store.gpu
+        let bluetooth = await store.bluetooth
+        let wifi = await store.wifi
+        let security = await store.security
+        let ssdWear = await store.ssdWear
+        let timeMachine = await store.timeMachine
+        let loginItems = await store.loginItems
+        let memoryLeak = await store.memoryLeak
+        let focus = await store.focus
 
         // Decompose into named sub-dicts to avoid Swift type-checker timeout
         let cpuDict: [String: Any] = [
@@ -156,6 +165,100 @@ struct CloudPusher: Service {
         if let batteryDict { metrics["battery"] = batteryDict }
         if let benchmarkDict { metrics["benchmark"] = benchmarkDict }
         if let icloudDict { metrics["icloud"] = icloudDict }
+
+        // GPU
+        if gpu.timestamp != .distantPast {
+            metrics["gpu"] = [
+                "utilizationPercent": round(gpu.utilizationPercent * 1000) / 10,
+                "inUseMemoryMB": gpu.inUseSystemMemoryBytes / 1_048_576,
+                "allocatedMemoryMB": gpu.allocatedSystemMemoryBytes / 1_048_576,
+                "deviceName": gpu.deviceName,
+            ] as [String: Any]
+        }
+
+        // Bluetooth
+        if bluetooth.timestamp != .distantPast && !bluetooth.devices.isEmpty {
+            metrics["bluetooth"] = bluetooth.devices.map { device -> [String: Any] in
+                var d: [String: Any] = [
+                    "name": device.name,
+                    "connected": device.isConnected,
+                    "type": device.deviceType,
+                ]
+                if let battery = device.batteryPercent { d["batteryPercent"] = battery }
+                return d
+            }
+        }
+
+        // WiFi
+        if wifi.timestamp != .distantPast, wifi.ssid != nil {
+            metrics["wifi"] = [
+                "ssid": wifi.ssid as Any,
+                "rssi": wifi.rssi,
+                "noise": wifi.noise,
+                "snr": wifi.snr,
+                "channel": wifi.channel,
+                "channelBand": wifi.channelBand,
+                "txRate": wifi.txRate,
+                "signalQuality": wifi.signalQuality,
+            ] as [String: Any]
+        }
+
+        // Security
+        if security.timestamp != .distantPast {
+            metrics["security"] = [
+                "fileVaultEnabled": security.fileVaultEnabled,
+                "firewallEnabled": security.firewallEnabled,
+                "firewallStealthMode": security.firewallStealthMode,
+            ] as [String: Any]
+        }
+
+        // SSD Wear
+        if ssdWear.timestamp != .distantPast {
+            var ssdDict: [String: Any] = [:]
+            if let pct = ssdWear.percentageUsed { ssdDict["percentageUsed"] = pct }
+            if let spare = ssdWear.availableSpare { ssdDict["availableSpare"] = spare }
+            if let tb = ssdWear.dataWrittenTB { ssdDict["dataWrittenTB"] = round(tb * 100) / 100 }
+            if let hours = ssdWear.powerOnHours { ssdDict["powerOnHours"] = hours }
+            if let life = ssdWear.estimatedLifeRemainingPercent { ssdDict["lifeRemainingPercent"] = life }
+            if !ssdDict.isEmpty { metrics["ssdWear"] = ssdDict }
+        }
+
+        // Time Machine
+        if timeMachine.timestamp != .distantPast {
+            var tmDict: [String: Any] = [
+                "isConfigured": timeMachine.isConfigured,
+                "autoBackupEnabled": timeMachine.autoBackupEnabled,
+            ]
+            if let name = timeMachine.destinationName { tmDict["destinationName"] = name }
+            if let hours = timeMachine.hoursSinceLastBackup { tmDict["hoursSinceLastBackup"] = round(hours * 10) / 10 }
+            if let date = timeMachine.lastBackupDate { tmDict["lastBackupDate"] = ISO8601DateFormatter().string(from: date) }
+            metrics["timeMachine"] = tmDict
+        }
+
+        // Login Items
+        if loginItems.timestamp != .distantPast {
+            metrics["loginItems"] = loginItems.items.map { item -> [String: Any] in
+                var d: [String: Any] = ["name": item.name, "isHidden": item.isHidden]
+                if let path = item.path { d["path"] = path }
+                return d
+            }
+        }
+
+        // Memory Leak Suspects
+        if memoryLeak.timestamp != .distantPast && !memoryLeak.suspects.isEmpty {
+            metrics["memoryLeaks"] = memoryLeak.suspects.map { s -> [String: Any] in
+                ["pid": s.pid, "name": s.name, "currentMB": Int(s.currentMB),
+                 "growthMB": Int(s.growthMB), "growthRateMBPerHour": Int(s.growthRateMBPerHour)] as [String: Any]
+            }
+        }
+
+        // Focus Mode
+        if focus.timestamp != .distantPast {
+            metrics["focus"] = [
+                "isActive": focus.isActive,
+                "modeName": focus.modeName as Any,
+            ] as [String: Any]
+        }
 
         return ["metrics": metrics, "events": [] as [[String: Any]]]
     }

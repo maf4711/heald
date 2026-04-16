@@ -142,4 +142,21 @@ enum EventType: String, Codable, Sendable {
     // iCloud
     case icloudSyncDegraded = "icloud_sync_degraded"
     case icloudDaemonDown = "icloud_daemon_down"
+
+    // Security
+    case fileVaultDisabled = "filevault_disabled"
+    case firewallDisabled = "firewall_disabled"
+    case ssdWearWarning = "ssd_wear_warning"
+
+    // New collectors/checks
+    case gpuHighUsage = "gpu_high_usage"
+    case bluetoothLowBattery = "bluetooth_low_battery"
+    case wifiPoorSignal = "wifi_poor_signal"
+    case memoryLeakDetected = "memory_leak_detected"
+    case loginItemsScan = "login_items_scan"
+    case timeMachineStale = "time_machine_stale"
+    case timeMachineNotConfigured = "time_machine_not_configured"
+    case focusChanged = "focus_changed"
+    case diskIOAnomaly = "disk_io_anomaly"
+    case brewVulnerability = "brew_vulnerability"
 }

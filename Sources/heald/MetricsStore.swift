@@ -11,6 +11,15 @@ actor MetricsStore {
     private(set) var thermal: ThermalSnapshot = .empty
     private(set) var benchmark: BenchmarkSnapshot = .empty
     private(set) var icloud: ICloudSnapshot = .empty
+    private(set) var gpu: GPUSnapshot = .empty
+    private(set) var bluetooth: BluetoothSnapshot = .empty
+    private(set) var wifi: WiFiSnapshot = .empty
+    private(set) var security: SecuritySnapshot = .empty
+    private(set) var ssdWear: SSDWearSnapshot = .empty
+    private(set) var timeMachine: TimeMachineSnapshot = .empty
+    private(set) var loginItems: LoginItemsSnapshot = .empty
+    private(set) var memoryLeak: MemoryLeakSnapshot = .empty
+    private(set) var focus: FocusSnapshot = .empty
 
     func updateCPU(_ snapshot: CPUSnapshot) { cpu = snapshot }
     func updateRAM(_ snapshot: RAMSnapshot) { ram = snapshot }
@@ -22,6 +31,15 @@ actor MetricsStore {
     func updateThermal(_ snapshot: ThermalSnapshot) { thermal = snapshot }
     func updateBenchmark(_ snapshot: BenchmarkSnapshot) { benchmark = snapshot }
     func updateICloud(_ snapshot: ICloudSnapshot) { icloud = snapshot }
+    func updateGPU(_ snapshot: GPUSnapshot) { gpu = snapshot }
+    func updateBluetooth(_ snapshot: BluetoothSnapshot) { bluetooth = snapshot }
+    func updateWiFi(_ snapshot: WiFiSnapshot) { wifi = snapshot }
+    func updateSecurity(_ snapshot: SecuritySnapshot) { security = snapshot }
+    func updateSSDWear(_ snapshot: SSDWearSnapshot) { ssdWear = snapshot }
+    func updateTimeMachine(_ snapshot: TimeMachineSnapshot) { timeMachine = snapshot }
+    func updateLoginItems(_ snapshot: LoginItemsSnapshot) { loginItems = snapshot }
+    func updateMemoryLeak(_ snapshot: MemoryLeakSnapshot) { memoryLeak = snapshot }
+    func updateFocus(_ snapshot: FocusSnapshot) { focus = snapshot }
 
     // --- Swap Spike Detection (MON-07) ---
     // Rate-of-change detection: fires when BOTH conditions met:

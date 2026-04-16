@@ -43,12 +43,18 @@ struct HealdService: Service {
         let uptimeCollector   = UptimeCollector(store: store)
         let thermalCollector  = ThermalCollector(store: store, activityLog: activityLog)
         let icloudCollector   = ICloudCollector(store: store, activityLog: activityLog)
+        let gpuCollector      = GPUCollector(store: store)
+        let bluetoothCollector = BluetoothCollector(store: store, activityLog: activityLog)
+        let wifiCollector     = WiFiCollector(store: store)
+        let memoryLeakDetector = MemoryLeakDetector(store: store, activityLog: activityLog)
+        let loginItemsCollector = LoginItemsCollector(store: store)
         let debugWriter       = DebugStatusWriter(store: store)
 
         let collectorGroup = ServiceGroup(
             services: [cpuCollector, ramCollector, diskCollector, processCollector,
                        networkCollector, batteryCollector, uptimeCollector, thermalCollector,
-                       icloudCollector,
+                       icloudCollector, gpuCollector, bluetoothCollector, wifiCollector,
+                       memoryLeakDetector, loginItemsCollector,
                        debugWriter, storageService, cloudPusher, healingService,
                        healthCheckService, notificationService, maintenanceService],
             logger: .init(label: "com.heald.services")
