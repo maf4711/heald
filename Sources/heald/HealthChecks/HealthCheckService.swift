@@ -2,17 +2,14 @@ import Foundation
 import ServiceLifecycle
 import OSLog
 
-/// HLTH-03: Orchestrates health checks on their own schedules.
+/// Orchestrates all health checks on their own schedules.
 /// - Crash detection: every 30s
-/// - DNS check: every 60s
-/// - Focus check: every 60s
 /// - Disk I/O anomaly: every 30s
+/// - DNS + Focus: every 60s
 /// - LaunchAgent scan: every 300s
-/// - Time Machine: every 3600s
-/// - Security (FileVault, Firewall): every 3600s
-/// - SSD Wear: every 3600s
-/// - Homebrew audit: every 21600s (6h)
-/// - Update check: every 3600s (1h)
+/// - Spotlight + iCloud ghosts: every 300s
+/// - Hourly: Updates, Time Machine, Security suite, SSD Wear, Git repos
+/// - Every 6h: Homebrew audit, Persistence audit, TCC audit
 struct HealthCheckService: Service {
     let store: MetricsStore
     let activityLog: ActivityLog
@@ -27,8 +24,16 @@ struct HealthCheckService: Service {
         let timeMachineChecker = TimeMachineChecker()
         let fileVaultChecker = FileVaultChecker()
         let firewallChecker = FirewallChecker()
+        let gatekeeperChecker = GatekeeperChecker()
+        let sipChecker = SIPChecker()
+        let xprotectChecker = XProtectChecker()
         let ssdWearChecker = SSDWearChecker()
         let homebrewAuditor = HomebrewAuditor()
+        let persistenceAuditor = PersistenceAuditor()
+        let tccAuditor = TCCAuditor()
+        let spotlightHealer = SpotlightHealer()
+        let icloudGhostCleaner = ICloudGhostCleaner()
+        let gitRepoScanner = GitRepoScanner()
 
         var cycle = 0
 
@@ -45,15 +50,17 @@ struct HealthCheckService: Service {
             // Disk I/O anomaly detection — every 30s
             await diskIOAnomalyDetector.check(store: store, activityLog: activityLog)
 
-            // DNS check — every 60s (cycle % 2 == 0)
+            // DNS + Focus check — every 60s (cycle % 2 == 0)
             if cycle % 2 == 0 {
                 await dnsChecker.check(activityLog: activityLog)
                 _ = await focusChecker.check(store: store)
             }
 
-            // LaunchAgent scan — every 300s (cycle % 10 == 0)
+            // LaunchAgent scan + Spotlight + iCloud — every 300s (cycle % 10 == 0)
             if cycle % 10 == 0 {
                 await launchAgentScanner.scan(activityLog: activityLog)
+                await spotlightHealer.check(activityLog: activityLog)
+                await icloudGhostCleaner.check(activityLog: activityLog)
             }
 
             // Hourly checks — every 3600s (cycle % 120 == 0)
@@ -66,23 +73,37 @@ struct HealthCheckService: Service {
                 // Time Machine
                 await timeMachineChecker.check(store: store, activityLog: activityLog)
 
-                // Security checks
+                // Full security suite
                 let fileVaultEnabled = await fileVaultChecker.check(activityLog: activityLog)
                 let firewallStatus = await firewallChecker.check(activityLog: activityLog)
+                let gatekeeperEnabled = await gatekeeperChecker.check(activityLog: activityLog)
+                let sipEnabled = await sipChecker.check(activityLog: activityLog)
+                let xprotectStatus = await xprotectChecker.check(activityLog: activityLog)
+
                 await store.updateSecurity(SecuritySnapshot(
                     fileVaultEnabled: fileVaultEnabled,
                     firewallEnabled: firewallStatus.enabled,
                     firewallStealthMode: firewallStatus.stealthMode,
+                    gatekeeperEnabled: gatekeeperEnabled,
+                    sipEnabled: sipEnabled,
+                    xprotectVersion: xprotectStatus.version,
+                    xprotectSignatureAgeDays: xprotectStatus.signatureAgeDays,
+                    xprotectRemediatorVersion: xprotectStatus.remediatorVersion,
                     timestamp: Date()
                 ))
 
                 // SSD Wear
                 await ssdWearChecker.check(store: store, activityLog: activityLog)
+
+                // Git repos
+                _ = await gitRepoScanner.scan(activityLog: activityLog)
             }
 
-            // Homebrew security audit — every 6h (cycle % 720 == 0)
+            // 6-hour checks — every 21600s (cycle % 720 == 0)
             if cycle % 720 == 0 {
                 await homebrewAuditor.audit(activityLog: activityLog)
+                _ = await persistenceAuditor.audit(activityLog: activityLog)
+                _ = await tccAuditor.audit(activityLog: activityLog)
             }
         }
     }

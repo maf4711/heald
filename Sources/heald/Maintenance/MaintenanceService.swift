@@ -18,6 +18,7 @@ struct MaintenanceService: Service {
         let clamAVScanner = ClamAVScanner()
         let ollamaModelUpdater = OllamaModelUpdater()
         let systemBenchmark = SystemBenchmark()
+        let deepClean = DeepClean()
         let selfHealingRunner = SelfHealingRunner(
             ollamaClient: ollamaClient,
             activityLog: activityLog
@@ -113,6 +114,10 @@ struct MaintenanceService: Service {
 
                 await selfHealingRunner.runSafe(name: "LMStudioSync") {
                     try await ollamaModelUpdater.syncToLMStudio(activityLog: activityLog)
+                }
+
+                await selfHealingRunner.runSafe(name: "DeepClean") {
+                    await deepClean.run(activityLog: activityLog)
                 }
 
                 try? await activityLog.log(event: ActivityEvent(

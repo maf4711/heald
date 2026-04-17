@@ -159,4 +159,22 @@ enum EventType: String, Codable, Sendable {
     case focusChanged = "focus_changed"
     case diskIOAnomaly = "disk_io_anomaly"
     case brewVulnerability = "brew_vulnerability"
+
+    // Security (meister port)
+    case gatekeeperDisabled = "gatekeeper_disabled"
+    case sipDisabled = "sip_disabled"
+    case xprotectStale = "xprotect_stale"
+    case suspiciousPersistence = "suspicious_persistence"
+    case tccOrphanedPermission = "tcc_orphaned_permission"
+
+    // Spotlight + iCloud (meister port)
+    case spotlightStuck = "spotlight_stuck"
+    case icloudGhostFolders = "icloud_ghost_folders"
+    case icloudCorruptStubs = "icloud_corrupt_stubs"
+
+    // Git
+    case gitReposDirty = "git_repos_dirty"
+
+    // Deep Clean
+    case deepCleanCompleted = "deep_clean_completed"
 }

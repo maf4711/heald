@@ -205,11 +205,18 @@ struct CloudPusher: Service {
 
         // Security
         if security.timestamp != .distantPast {
-            metrics["security"] = [
+            var secDict: [String: Any] = [
                 "fileVaultEnabled": security.fileVaultEnabled,
                 "firewallEnabled": security.firewallEnabled,
                 "firewallStealthMode": security.firewallStealthMode,
-            ] as [String: Any]
+                "gatekeeperEnabled": security.gatekeeperEnabled,
+                "sipEnabled": security.sipEnabled,
+                "securityScore": "\(security.securityScore)/4",
+            ]
+            if let v = security.xprotectVersion { secDict["xprotectVersion"] = v }
+            if let age = security.xprotectSignatureAgeDays { secDict["xprotectSignatureAgeDays"] = age }
+            if let rv = security.xprotectRemediatorVersion { secDict["xprotectRemediatorVersion"] = rv }
+            metrics["security"] = secDict
         }
 
         // SSD Wear
