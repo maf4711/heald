@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Render engine for heald-top. Reads JSON from temp files, outputs ANSI."""
+
 import json, sys, os
 from datetime import datetime, timezone
 
@@ -7,7 +8,15 @@ cols = int(sys.argv[1]) if len(sys.argv) > 1 else 120
 rows = int(sys.argv[2]) if len(sys.argv) > 2 else 40
 interval = sys.argv[3] if len(sys.argv) > 3 else "5"
 
-B, D, R, G, Y, RD, C = "\033[1m", "\033[2m", "\033[0m", "\033[32m", "\033[33m", "\033[31m", "\033[36m"
+B, D, R, G, Y, RD, C = (
+    "\033[1m",
+    "\033[2m",
+    "\033[0m",
+    "\033[32m",
+    "\033[33m",
+    "\033[31m",
+    "\033[36m",
+)
 BG = "\033[48;5;234m"
 SEP = "\u2500"
 DASH = "\u2014"
@@ -72,7 +81,9 @@ n = len(machines)
 online = 0
 for m in machines:
     try:
-        dt = datetime.fromisoformat(m.get("lastSeen", "2000-01-01T00:00:00Z").replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(
+            m.get("lastSeen", "2000-01-01T00:00:00Z").replace("Z", "+00:00")
+        )
         if (now - dt).total_seconds() < 600:
             online += 1
     except Exception:
@@ -81,17 +92,25 @@ for m in machines:
 stale = n - online
 avg_cpu = sum(m.get("cpu", {}).get("overall", 0) for m in machines) / max(n, 1) * 100
 ic_ok = sum(1 for m in machines if m.get("icloud", {}).get("syncPercent", 100) >= 99.9)
-ic_bad = sum(1 for m in machines if m.get("icloud") and m["icloud"].get("syncPercent", 100) < 99.9)
+ic_bad = sum(
+    1
+    for m in machines
+    if m.get("icloud") and m["icloud"].get("syncPercent", 100) < 99.9
+)
 cloud_total = sum(m.get("icloud", {}).get("cloudFiles", 0) for m in machines)
 conflicts = sum(m.get("icloud", {}).get("conflicts", 0) for m in machines)
-bird_down = sum(1 for m in machines if m.get("icloud") and not m["icloud"].get("birdRunning", True))
+bird_down = sum(
+    1 for m in machines if m.get("icloud") and not m["icloud"].get("birdRunning", True)
+)
 
 o = []
 ts = now.strftime("%H:%M:%S")
 
 # Clear screen + header
 o.append("\033[H\033[J")
-o.append(f"{B}heald-top{R} {DASH} {ts} {DASH} {n} machines {DASH} refresh {interval}s\n")
+o.append(
+    f"{B}heald-top{R} {DASH} {ts} {DASH} {n} machines {DASH} refresh {interval}s\n"
+)
 
 # Fleet bar
 o.append(f"{B}Fleet:{R}  {G}{online}{R} online")
@@ -119,6 +138,7 @@ hdr = (
 )
 o.append(f"{BG}{B}{hdr[:cols]}{R}\n")
 
+
 # Sort: problems first, then stale, then name
 def sort_key(m):
     ic = m.get("icloud", {})
@@ -132,7 +152,9 @@ def sort_key(m):
     if ic.get("syncPercent", 100) < 90:
         problems += 1
     try:
-        dt = datetime.fromisoformat(m.get("lastSeen", "2000-01-01T00:00:00Z").replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(
+            m.get("lastSeen", "2000-01-01T00:00:00Z").replace("Z", "+00:00")
+        )
         is_stale = 0 if (now - dt).total_seconds() < 600 else 1
     except Exception:
         is_stale = 1
@@ -144,7 +166,7 @@ machines.sort(key=sort_key)
 ev_rows = min(len(events), 6)
 avail = rows - 7 - ev_rows
 
-for m in machines[:max(avail, 3)]:
+for m in machines[: max(avail, 3)]:
     hostname = m.get("hostname", "?")[:19]
     last_seen = ago(m.get("lastSeen", ""))
     cpu_pct = m.get("cpu", {}).get("overall", 0) * 100
@@ -236,7 +258,7 @@ if events:
         t = ev.get("type", "")
         color = type_colors.get(t, D)
         ev_ts = ev.get("timestamp", "")[:19].replace("T", " ")
-        summary = ev.get("summary", "")[:cols - 35]
+        summary = ev.get("summary", "")[: cols - 35]
         machine_id = ev.get("machineId", "")[:10]
         o.append(f"  {D}{ev_ts}{R} {color}{summary}{R} {D}{machine_id}{R}\n")
 
