@@ -1,0 +1,30 @@
+# Monorepo: only ship the Next.js dashboard to Vercel
+# (project rootDirectory = dashboard; keep upload small)
+
+.build/
+.swiftpm/
+Sources/
+Tests/
+heald-ios/
+heald-macos/
+homebrew/
+launchd/
+docs/
+.planning/
+*.xcodeproj/
+**/DerivedData/
+**/.build/
+node_modules/
+dashboard/node_modules/
+dashboard/.next/
+.git/
+*.db
+*.ndjson
+heald-top
+heald-top-render.py
+install.sh
+uninstall.sh
+Package.swift
+Package.resolved
+*.tar.gz
+*.zip

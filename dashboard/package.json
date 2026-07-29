@@ -7,8 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "deploy": "vercel --prod --yes --scope marco-3586s-projects",
-    "deploy:prod": "vercel --prod --yes --scope marco-3586s-projects"
+    "deploy": "npm run deploy:prod",
+    "deploy:prod": "cd .. && vercel --prod --yes --scope marco-3586s-projects"
   },
   "dependencies": {
     "next": "^15.0.0",
