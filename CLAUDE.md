@@ -2,7 +2,9 @@
 
 macOS system health daemon — monitors, diagnoses, and self-heals your Mac.
 
-**v2.0 product:** AI is **Apple Intelligence only** (on-device FoundationModels), same model stack as meisterSiri. No Ollama.
+**v2.2 product:** AI is **Apple Intelligence only** (on-device FoundationModels).  
+**Meister integrated:** batch-maintain runs via preferred twin (`meisterSiri` / `meister`).  
+heald = continuous observe + schedule; Meister = module suite (heal, autofix, deep clean, …).
 
 ## Tech Stack
 
@@ -26,17 +28,22 @@ macOS system health daemon — monitors, diagnoses, and self-heals your Mac.
 
 ```bash
 swift build -c release
-.build/release/heald doctor   # AI + install health
-.build/release/heald run      # daemon (default if no subcommand)
+.build/release/heald doctor
+.build/release/heald status
+.build/release/heald maintain --profile quick   # Meister --quick
+.build/release/heald maintain --profile deep
+.build/release/heald heal | autofix | storage | score | twins-bench | why
+.build/release/heald meister <args…>            # passthrough
+.build/release/heald run                        # daemon (default)
 
-# Install as launchd service (downloads release binary OR use local binary)
-./install.sh
-
-# Local install of just-built binary:
+# Local install (always after build on this Mac):
 mkdir -p ~/Library/heald
 cp .build/release/heald ~/Library/heald/heald
-# then re-run install.sh steps or bootstrap LaunchAgent with HEALD_API_KEY
+ln -sfn ~/Library/heald/heald /opt/homebrew/bin/heald
+launchctl kickstart -k "gui/$(id -u)/com.heald.daemon"
 ```
+
+Daemon (Meister installed): 02:00 benchmark · 09:15 `--quick` · Sun 10:30 `--deep`
 
 ## AI contract
 

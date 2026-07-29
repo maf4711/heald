@@ -97,29 +97,28 @@ struct MeisterBridgeService: Service {
     }
 
     private func triggerMaintain(cli: String, reason: String) async {
-        guard let exe = ShellRunner.findExecutable(cli) else {
-            Logger.lifecycle.warning("MeisterBridge: \(cli) not on PATH — skip trigger")
+        guard MeisterClient.isInstalled else {
+            Logger.lifecycle.warning("MeisterBridge: meister not on PATH — skip trigger")
             try? await activityLog.log(event: ActivityEvent(
                 type: .maintenanceStarted,
-                summary: "MeisterBridge skip: \(cli) not found (\(reason))"
+                summary: "MeisterBridge skip: meister not found (\(reason))"
             ))
             return
         }
 
-        Logger.lifecycle.info("MeisterBridge: triggering \(cli) --quick -q (\(reason))")
+        Logger.lifecycle.info("MeisterBridge: \(cli) --quick -q (\(reason))")
         try? await activityLog.log(event: ActivityEvent(
             type: .maintenanceStarted,
-            summary: "MeisterBridge → \(cli) --quick -q (\(reason))"
+            summary: "MeisterBridge → maintain --quick (\(reason))"
         ))
 
-        // Run off the cooperative pool so we don't block the service loop hard
         let result = await Task.detached {
-            ShellRunner.run(exe, arguments: ["--quick", "-q"])
+            MeisterClient.maintain(profile: .quick, dryRun: false, quiet: true)
         }.value
 
         let summary = result.succeeded
-            ? "MeisterBridge \(cli) ok (exit \(result.exitCode))"
-            : "MeisterBridge \(cli) exit \(result.exitCode): \(result.errorOutput.prefix(200))"
+            ? "MeisterBridge \(result.executable) ok (\(result.durationMs)ms exit \(result.exitCode))"
+            : "MeisterBridge exit \(result.exitCode): \(result.stderr.prefix(200))"
         try? await activityLog.log(event: ActivityEvent(
             type: result.succeeded ? .maintenanceCompleted : .maintenanceStarted,
             summary: String(summary)
