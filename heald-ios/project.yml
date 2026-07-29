@@ -5,12 +5,16 @@ options:
     iOS: "17.0"
   xcodeVersion: "16.0"
   generateEmptyDirectories: true
+  createIntermediateGroups: true
 settings:
   base:
     SWIFT_VERSION: "5.9"
-    TARGETED_DEVICE_FAMILY: "1"
+    # 1 = iPhone, 2 = iPad — universal client
+    TARGETED_DEVICE_FAMILY: "1,2"
     INFOPLIST_KEY_CFBundleDisplayName: "Heald"
     INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.utilities"
+    MARKETING_VERSION: "2.0.0"
+    CURRENT_PROJECT_VERSION: "2"
 targets:
   Heald:
     type: application
@@ -19,16 +23,37 @@ targets:
       - HealdApp
     settings:
       base:
-        INFOPLIST_KEY_UILaunchScreen_Generation: true
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
-        INFOPLIST_KEY_UIUserInterfaceStyle: "Dark"
-        ASSETCATALOG_COMPILER_APPICON_NAME: "AppIcon"
-        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: "AccentColor"
+        PRODUCT_BUNDLE_IDENTIFIER: com.merados.heald.app
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UIRequiresFullScreen: NO
+        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
     info:
       path: HealdApp/Info.plist
       properties:
         UIBackgroundModes:
           - fetch
-          - remote-notification
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
+        UIDeviceFamily:
+          - 1
+          - 2
+        CFBundleDisplayName: Heald
+        CFBundleShortVersionString: "2.0.0"
+        CFBundleVersion: "2"
+schemes:
+  Heald:
+    build:
+      targets:
+        Heald: all
+    run:
+      config: Debug
+    archive:
+      config: Release

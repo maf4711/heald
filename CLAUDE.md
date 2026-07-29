@@ -45,6 +45,16 @@ cp .build/release/heald ~/Library/heald/heald
 - Heal shell commands always pass `AISafetyBlocklist` before execution
 - No model downloads, no localhost:11434
 
+## iOS / iPad client
+
+Universal app in `heald-ios/` (iPhone + iPad, SwiftUI).
+
+```bash
+cd heald-ios && xcodegen generate && open Heald.xcodeproj
+```
+
+Default API: `https://heald.sh`. See `heald-ios/README.md`.
+
 ## Dashboard (Vercel) — always production
 
 - Project: `marco-3586s-projects/heald`

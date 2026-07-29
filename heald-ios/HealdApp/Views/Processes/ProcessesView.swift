@@ -9,7 +9,7 @@ struct ProcessesView: View {
         selectedMachine ?? appState.machines.first
     }
 
-    private var processes: [ProcessInfo] {
+    private var processes: [HealdProcess] {
         guard let machine = currentMachine else { return [] }
         switch sortBy {
         case .cpu: return machine.processes.topCPU
@@ -101,7 +101,7 @@ enum ProcessSortMode {
 }
 
 struct ProcessRow: View {
-    let process: ProcessInfo
+    let process: HealdProcess
     let rank: Int
     let sortMode: ProcessSortMode
 

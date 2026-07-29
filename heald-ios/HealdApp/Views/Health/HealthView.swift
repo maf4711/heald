@@ -14,7 +14,7 @@ struct HealthView: View {
 
         for machine in appState.machines {
             // CPU
-            if machine.cpu.overall > 0.9 {
+            if machine.cpu.overallUnit > 0.9 {
                 issues.append(HealthIssue(
                     machine: machine.hostname,
                     category: "CPU",
@@ -22,7 +22,7 @@ struct HealthView: View {
                     severity: .critical,
                     message: "CPU at \(machine.cpu.overallPercent)%"
                 ))
-            } else if machine.cpu.overall > 0.75 {
+            } else if machine.cpu.overallUnit > 0.75 {
                 issues.append(HealthIssue(
                     machine: machine.hostname,
                     category: "CPU",

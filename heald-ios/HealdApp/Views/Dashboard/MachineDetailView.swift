@@ -25,6 +25,11 @@ struct MachineDetailView: View {
                 // Disk
                 diskSection
 
+                // iCloud
+                if machine.icloud != nil {
+                    icloudSection
+                }
+
                 // Processes
                 processSection
 
@@ -72,7 +77,7 @@ struct MachineDetailView: View {
 
             if let history, !history.isEmpty {
                 MiniChart(
-                    data: history.map { $0.cpuOverall },
+                    data: history.map { $0.cpuUnit },
                     color: Theme.accent,
                     height: 60
                 )
@@ -81,18 +86,19 @@ struct MachineDetailView: View {
             if !machine.cpu.perCore.isEmpty {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: min(machine.cpu.perCore.count, 8)), spacing: 4) {
                     ForEach(Array(machine.cpu.perCore.enumerated()), id: \.offset) { index, value in
+                        let unit = machine.cpu.coreUnit(value)
                         VStack(spacing: 2) {
-                            Text("\(Int(value * 100))")
+                            Text("\(Int(unit * 100))")
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundStyle(coreColor(value))
+                                .foregroundStyle(coreColor(unit))
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(coreColor(value).opacity(0.3))
+                                .fill(coreColor(unit).opacity(0.3))
                                 .frame(height: 3)
                                 .overlay(alignment: .leading) {
                                     GeometryReader { geo in
                                         RoundedRectangle(cornerRadius: 2)
-                                            .fill(coreColor(value))
-                                            .frame(width: geo.size.width * value)
+                                            .fill(coreColor(unit))
+                                            .frame(width: geo.size.width * unit)
                                     }
                                 }
                         }
@@ -178,6 +184,30 @@ struct MachineDetailView: View {
         .cardStyle()
     }
 
+    // MARK: - iCloud
+
+    private var icloudSection: some View {
+        VStack(alignment: .leading, spacing: Theme.paddingMD) {
+            SectionHeader(title: "iCloud Drive", icon: "icloud", value: machine.icloud.map { "\(Int($0.syncPercent))%" } ?? "")
+            if let ic = machine.icloud {
+                VStack(spacing: 6) {
+                    MetricRow(label: "Sync", value: "\(Int(ic.syncPercent))%")
+                    MetricRow(label: "Local files", value: "\(ic.localFiles)")
+                    MetricRow(label: "Cloud only", value: "\(ic.cloudFiles)")
+                    MetricRow(label: "Docs size", value: String(format: "%.1f GB", ic.docsSizeGB))
+                    MetricRow(label: "Conflicts", value: "\(ic.conflicts)",
+                              color: ic.conflicts > 0 ? Theme.warning : Theme.textPrimary)
+                    MetricRow(label: "bird", value: ic.birdRunning ? "running" : "stopped",
+                              color: ic.birdRunning ? Theme.success : Theme.critical)
+                }
+                ProgressView(value: min(ic.syncPercent / 100, 1))
+                    .tint(Theme.accentAI)
+                    .scaleEffect(y: 1.5)
+            }
+        }
+        .cardStyle()
+    }
+
     // MARK: - Processes
 
     private var processSection: some View {
@@ -247,7 +277,7 @@ enum ProcessMetricType {
 
 struct ProcessList: View {
     let title: String
-    let processes: [ProcessInfo]
+    let processes: [HealdProcess]
     let metric: ProcessMetricType
 
     var body: some View {

@@ -168,7 +168,7 @@ struct MachineCardView: View {
                 MiniMetric(
                     label: "CPU",
                     value: "\(machine.cpu.overallPercent)%",
-                    progress: machine.cpu.overall
+                    progress: machine.cpu.overallUnit
                 )
                 MiniMetric(
                     label: "RAM",
@@ -187,7 +187,7 @@ struct MachineCardView: View {
             // Mini Chart
             if let history, !history.isEmpty {
                 MiniChart(
-                    data: history.suffix(30).map { $0.cpuOverall },
+                    data: history.suffix(30).map { $0.cpuUnit },
                     color: Theme.accent,
                     height: 32
                 )
