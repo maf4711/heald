@@ -8,6 +8,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/Users/USERNAME/Library/heald/heald</string>
+        <string>run</string>
     </array>
     <key>KeepAlive</key>
     <true/>
