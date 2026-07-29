@@ -45,6 +45,24 @@ cp .build/release/heald ~/Library/heald/heald
 - Heal shell commands always pass `AISafetyBlocklist` before execution
 - No model downloads, no localhost:11434
 
+## Dashboard (Vercel) — always production
+
+- Project: `marco-3586s-projects/heald`
+- Git: `maf4711/heald` · production branch **`main`** · root **`dashboard/`**
+- Domain: `heald.sh` (and `www.heald.sh`)
+- **Always deploy to prod** — never leave a preview as the primary ship path:
+
+```bash
+# from repo
+./scripts/deploy-dashboard.sh
+# or
+cd dashboard && npm run deploy
+# or
+cd dashboard && vercel --prod --yes
+```
+
+Push to `main` also triggers a **production** deploy via Vercel Git integration.
+
 ## Uninstall
 
 ```bash
