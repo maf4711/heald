@@ -79,6 +79,7 @@ cat > "$PLIST" << PLISTEOF
     <key>ProgramArguments</key>
     <array>
         <string>${BINARY}</string>
+        <string>run</string>
     </array>
     <key>KeepAlive</key>
     <true/>

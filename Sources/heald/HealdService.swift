@@ -19,19 +19,19 @@ struct HealdService: Service {
         let storageService = StorageService(store: store, db: db, activityLog: activityLog)
         let cloudPusher    = CloudPusher(store: store, activityLog: activityLog)
 
+        // --- Apple Intelligence (on-device only; meisterSiri-style) ---
+        let ai = AppleIntelligenceClient()
+        await ai.checkAvailability()
+
         // --- Healing (Phase 5) ---
-        let healingService = HealingService(store: store, activityLog: activityLog)
+        let healingService = HealingService(store: store, activityLog: activityLog, ai: ai)
 
         // --- Health Checks (Phase 6) ---
         let healthCheckService = HealthCheckService(store: store, activityLog: activityLog)
 
-        // --- AI + Notifications (Phase 7) ---
-        let ollamaClient = OllamaClient()
-        await ollamaClient.checkAvailability()
-        let notificationService = NotificationService(store: store, activityLog: activityLog, ollamaClient: ollamaClient)
-
-        // --- Maintenance + Benchmark ---
-        let maintenanceService = MaintenanceService(store: store, db: db, activityLog: activityLog, ollamaClient: ollamaClient)
+        // --- Notifications + Maintenance (Phase 7) ---
+        let notificationService = NotificationService(store: store, activityLog: activityLog, ai: ai)
+        let maintenanceService = MaintenanceService(store: store, db: db, activityLog: activityLog, ai: ai)
 
         // --- Collectors ---
         let cpuCollector      = CPUCollector(store: store)

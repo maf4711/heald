@@ -1,42 +1,30 @@
 import Foundation
 import OSLog
+import FoundationModels
 
-/// AI-01, AI-04, AI-05: Ollama integration with qwen3-coder:30b.
-/// Falls back to rule-based decisions when Ollama is unavailable.
-actor OllamaClient {
-    private let baseURL: String
-    private let model: String
+/// On-device AI via Apple Intelligence (FoundationModels) — same backend as meisterSiri.
+/// No Ollama, no network model server. Falls back to rules when unavailable.
+actor AppleIntelligenceClient {
     private(set) var isAvailable: Bool = false
 
-    init(
-        baseURL: String = ProcessInfo.processInfo.environment["OLLAMA_URL"] ?? "http://localhost:11434",
-        model: String = "qwen3-coder:30b"
-    ) {
-        self.baseURL = baseURL
-        self.model = model
-    }
-
-    /// Check if Ollama is reachable.
+    /// Probe SystemLanguageModel availability (Apple Intelligence enabled + model ready).
     func checkAvailability() async {
-        guard let url = URL(string: "\(baseURL)/api/tags") else {
-            isAvailable = false
-            return
-        }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 3
-
-        do {
-            let (_, response) = try await URLSession.shared.data(for: request)
-            isAvailable = (response as? HTTPURLResponse)?.statusCode == 200
-        } catch {
+        switch SystemLanguageModel.default.availability {
+        case .available:
+            isAvailable = true
+        default:
             isAvailable = false
         }
-
-        Logger.ai.info("Ollama: \(self.isAvailable ? "online" : "offline") (\(self.model))")
+        Logger.ai.info("Apple Intelligence: \(self.isAvailable ? "available" : "unavailable")")
     }
 
-    /// AI-02: Ask Ollama whether a process should be killed.
-    func shouldKillProcess(name: String, cpuPercent: Double, ramMB: Double, duration: TimeInterval) async -> AIDecision {
+    /// Whether a high-resource process should be killed.
+    func shouldKillProcess(
+        name: String,
+        cpuPercent: Double,
+        ramMB: Double,
+        duration: TimeInterval
+    ) async -> AIDecision {
         guard isAvailable else { return .fallbackToRules }
 
         let prompt = """
@@ -64,16 +52,17 @@ actor OllamaClient {
         return .fallbackToRules
     }
 
-    /// AI-03: Generate daily summary from activity log.
+    /// Natural-language daily summary for email report (German).
     func generateDailySummary(events: String) async -> String? {
         guard isAvailable else { return nil }
 
+        let clipped = String(events.suffix(6000))
         let prompt = """
             Du bist ein macOS System-Bericht-Generator. Fasse die folgenden System-Events des Tages zusammen.
             Schreibe einen kurzen, klaren Bericht auf Deutsch (max 10 Saetze).
 
             EVENTS:
-            \(events)
+            \(clipped)
 
             ZUSAMMENFASSUNG:
             """
@@ -81,7 +70,7 @@ actor OllamaClient {
         return await query(prompt: prompt)
     }
 
-    /// Self-healing: analyze a module failure and suggest a fix command.
+    /// Suggest a non-interactive shell fix for a failed maintenance module.
     func selfHealAnalyze(moduleName: String, error: String) async -> String? {
         guard isAvailable else { return nil }
 
@@ -91,7 +80,7 @@ actor OllamaClient {
             MODUL: \(moduleName)
             FEHLER: \(error)
 
-            SYSTEM: macOS, Homebrew, Apple Silicon, Swift daemon (LaunchAgent)
+            SYSTEM: macOS Apple Silicon, Homebrew, Swift daemon (LaunchAgent), Apple Intelligence on-device
 
             Liefere NUR den Fix-Befehl (Shell-Commands, eine pro Zeile).
             Keine Erklaerungen. Kein Markdown. Muss ohne Interaktion laufen.
@@ -101,38 +90,21 @@ actor OllamaClient {
         return await query(prompt: prompt)
     }
 
-    /// Low-level Ollama API call.
     private func query(prompt: String) async -> String? {
-        guard let url = URL(string: "\(baseURL)/api/generate") else { return nil }
-
-        let body: [String: Any] = [
-            "model": model,
-            "prompt": prompt,
-            "stream": false,
-            "options": ["temperature": 0.1, "num_predict": 512],
-        ]
-
-        guard let bodyData = try? JSONSerialization.data(withJSONObject: body) else { return nil }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = bodyData
-        request.timeoutInterval = 30
-
+        guard isAvailable else { return nil }
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
-            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let response = json["response"] as? String else { return nil }
-            return response
+            let session = LanguageModelSession()
+            let response = try await session.respond(to: prompt)
+            let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? nil : text
         } catch {
-            Logger.ai.error("Ollama query failed: \(error)")
+            Logger.ai.error("Apple Intelligence query failed: \(error.localizedDescription)")
             return nil
         }
     }
 }
 
-enum AIDecision: Sendable {
+enum AIDecision: Sendable, Equatable {
     case kill
     case wait
     case ignore

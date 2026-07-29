@@ -70,13 +70,13 @@ enum AIPatchArchive {
 
 // MARK: - Self-Healing Runner
 
-/// Generic retry + AI analysis wrapper (adapted from meister2026.sh run_module_safe).
+/// Generic retry + AI analysis wrapper (Apple Intelligence on-device, meisterSiri-style).
 struct SelfHealingRunner {
-    let ollamaClient: OllamaClient
+    let ai: AppleIntelligenceClient
     let activityLog: ActivityLog
     let maxRetries: Int = 2
 
-    /// Run an operation with self-healing: on failure, ask Ollama for a fix, apply it, retry.
+    /// Run an operation with self-healing: on failure, ask Apple Intelligence for a fix, apply it, retry.
     func runSafe(name: String, _ operation: @Sendable () async throws -> Void) async {
         for attempt in 1...(maxRetries + 1) {
             do {
@@ -104,24 +104,24 @@ struct SelfHealingRunner {
                     break
                 }
 
-                // Ask Ollama for a fix
-                guard await ollamaClient.isAvailable else {
-                    Logger.maintenance.info("Ollama offline — no self-healing available for \(name)")
+                // Ask Apple Intelligence for a fix
+                guard await ai.isAvailable else {
+                    Logger.maintenance.info("Apple Intelligence unavailable — no AI self-heal for \(name)")
                     try? await activityLog.log(event: ActivityEvent(
                         type: .healingFailed,
-                        summary: "\(name) failed (Ollama offline)",
+                        summary: "\(name) failed (Apple Intelligence unavailable)",
                         detail: error.localizedDescription
                     ))
                     break
                 }
 
-                Logger.maintenance.info("Analyzing \(name) failure with Ollama...")
+                Logger.maintenance.info("Analyzing \(name) failure with Apple Intelligence...")
 
-                guard let fix = await ollamaClient.selfHealAnalyze(
+                guard let fix = await ai.selfHealAnalyze(
                     moduleName: name,
                     error: error.localizedDescription
                 ), fix != "NOFIX" else {
-                    Logger.maintenance.info("Ollama: no fix available for \(name)")
+                    Logger.maintenance.info("Apple Intelligence: no fix available for \(name)")
                     try? await activityLog.log(event: ActivityEvent(
                         type: .healingFailed,
                         summary: "Self-Heal: no fix for \(name)",

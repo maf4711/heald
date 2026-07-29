@@ -6,7 +6,7 @@ import OSLog
 struct NotificationService: Service {
     let store: MetricsStore
     let activityLog: ActivityLog
-    let ollamaClient: OllamaClient
+    let ai: AppleIntelligenceClient
 
     func run() async throws {
         while true {
@@ -55,10 +55,10 @@ struct NotificationService: Service {
         let lines = content.split(separator: "\n").suffix(100)
         let eventsText = lines.joined(separator: "\n")
 
-        // NOTF-04: AI summary
+        // NOTF-04: Apple Intelligence summary (on-device)
         var summary = "heald Daily Report\n\n"
-        if let aiSummary = await ollamaClient.generateDailySummary(events: eventsText) {
-            summary += "AI Zusammenfassung:\n\(aiSummary)\n\n"
+        if let aiSummary = await ai.generateDailySummary(events: eventsText) {
+            summary += "AI Zusammenfassung (Apple Intelligence):\n\(aiSummary)\n\n"
         }
         summary += "Letzte Events:\n\(eventsText)"
 

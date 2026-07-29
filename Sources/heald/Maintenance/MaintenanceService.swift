@@ -8,19 +8,18 @@ struct MaintenanceService: Service {
     let store: MetricsStore
     let db: MetricsDatabase
     let activityLog: ActivityLog
-    let ollamaClient: OllamaClient
+    let ai: AppleIntelligenceClient
 
     func run() async throws {
-        Logger.maintenance.info("MaintenanceService started")
+        Logger.maintenance.info("MaintenanceService started (AI: Apple Intelligence)")
 
         let homebrewMaintainer = HomebrewMaintainer()
         let systemCleaner = SystemCleaner()
         let clamAVScanner = ClamAVScanner()
-        let ollamaModelUpdater = OllamaModelUpdater()
         let systemBenchmark = SystemBenchmark()
         let deepClean = DeepClean()
         let selfHealingRunner = SelfHealingRunner(
-            ollamaClient: ollamaClient,
+            ai: ai,
             activityLog: activityLog
         )
 
@@ -61,10 +60,6 @@ struct MaintenanceService: Service {
 
                 await selfHealingRunner.runSafe(name: "OfficeUpdate") {
                     try await homebrewMaintainer.updateOffice(activityLog: activityLog)
-                }
-
-                await selfHealingRunner.runSafe(name: "OllamaModels") {
-                    try await ollamaModelUpdater.updateAllModels(activityLog: activityLog)
                 }
 
                 await selfHealingRunner.runSafe(name: "LargeFiles") {
@@ -110,10 +105,6 @@ struct MaintenanceService: Service {
 
                 await selfHealingRunner.runSafe(name: "PeriodicMaintenance") {
                     try await systemCleaner.runPeriodicMaintenance(activityLog: activityLog)
-                }
-
-                await selfHealingRunner.runSafe(name: "LMStudioSync") {
-                    try await ollamaModelUpdater.syncToLMStudio(activityLog: activityLog)
                 }
 
                 await selfHealingRunner.runSafe(name: "DeepClean") {

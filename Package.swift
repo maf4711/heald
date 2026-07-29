@@ -1,10 +1,10 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
     name: "heald",
     platforms: [
-        .macOS(.v15)
+        .macOS(.v26)
     ],
     dependencies: [
         .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.0.0"),

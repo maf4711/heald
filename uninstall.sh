@@ -4,7 +4,7 @@ set -euo pipefail
 # heald uninstall script
 # Usage: ./uninstall.sh
 # Removes the LaunchAgent, stops the daemon, and deletes all installed files.
-# Does NOT uninstall Homebrew packages (ollama may be used independently).
+# Does not remove ~/.heald data (metrics/activity) unless HEALD_PURGE_DATA=1.
 
 LABEL="com.heald.daemon"
 INSTALL_DIR="$HOME/Library/heald"
@@ -37,7 +37,12 @@ else
     echo "==> Install directory not found — skipping"
 fi
 
+if [ "${HEALD_PURGE_DATA:-0}" = "1" ]; then
+    echo "==> Purging ~/.heald data..."
+    rm -rf "$HOME/.heald"
+fi
+
 echo ""
 echo "heald uninstalled."
-echo "Note: ollama was not removed (it may be used independently)."
-echo "To remove ollama: brew uninstall ollama"
+echo "AI was on-device Apple Intelligence only — nothing else to remove."
+echo "Data left in ~/.heald (set HEALD_PURGE_DATA=1 to delete)."
