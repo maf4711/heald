@@ -17,12 +17,12 @@ export type ClientRelease = {
 };
 
 const defaults: ClientRelease = {
-  version: "3.1.0",
-  url: "https://github.com/maf4711/heald/releases/download/v3.1.0/heald",
+  version: "3.1.1",
+  url: "https://github.com/maf4711/heald/releases/download/v3.1.1/heald",
   // shasum -a 256 .build/release/heald
-  sha256: "fc18939f9cbc429d3c78caaae22e2e1c82b56904ca8166d8e7ba305f5deb23ab",
+  sha256: "23d02ced4b1df0173c58f9afb36520dfdd4ec1dca838650a525ac90d4c12ee38",
   minMacOS: "26.0",
-  notes: "heald 3.1 enterprise: policy, crash-loop, battery, network, webhooks, compliance, native self-heal",
+  notes: "heald 3.1.1: system error scanner, auto-update, enterprise self-heal",
 };
 
 export function getClientRelease(): ClientRelease {
