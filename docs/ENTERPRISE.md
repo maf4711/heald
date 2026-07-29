@@ -1,28 +1,57 @@
-# heald Enterprise vs Meister (private)
+# heald Enterprise 3.1
 
-| | **heald Enterprise** | **Meister / meisterSiri (private)** |
-|--|----------------------|-------------------------------------|
-| Product | Fleet / self-healing daemon | Personal Mac CLI |
-| Runtime | Always-on LaunchAgent | On-demand + optional LaunchAgents |
-| Dependency | **None on Meister** | Standalone Homebrew formula |
-| AI | Apple Intelligence on-device | meisterSiri = Apple; meister = Ollama |
-| Scope | Detect → heal continuously | Batch modules when you run them |
+**Private:** Meister / meisterSiri (`homebrew-meister`) — personal CLI, not a dependency.  
+**Enterprise:** heald — always-on self-heal, policy, compliance, fleet.
 
-## Self-heal loop (heald)
+## Self-heal (background)
 
-1. Collectors every few seconds (CPU, RAM, disk, thermal, …)
-2. Health checks (DNS, Spotlight, security, …)
-3. Process healer (sustained high CPU)
-4. **SelfHealOrchestrator** (~45s): pressure → native remediation + notify
-5. Scheduled maintain: quick 09:15 / deep Sun 10:30
+Detect → remediate → log → notify (≈45s), policy-gated.
 
-## What else is possible (roadmap)
+| Signal | Action |
+|--------|--------|
+| RAM pressure / swap | purge (sudo ticket) |
+| Disk free &lt; warn/critical | caches, trash, DerivedData, deep clean |
+| Thermal serious/critical | notify + purge |
+| Firewall off | enable (if consent=auto) |
+| FileVault off | notify + webhook |
+| Crash loop | quarantine LaunchAgents |
+| Packet loss | DNS flush |
+| Battery health/cycles | warn |
+| Maintenance window | optional security softwareupdate |
 
-- Policy packs (corp profile: block USB, enforce FileVault)
-- MDM / Jamf webhook on self-heal events
-- Multi-Mac fleet dashboard (already heald.sh) with auto-remediation ACK
-- SOC-lite: persistence + TCC drift alerts to Slack
-- Battery health degradation early warning
-- App-crash loop quarantine
-- Safe “sudo once” ticket agent for purge / mdutil rebuild
-- Compliance reports (ISO/SOC2-style inventory export)
+## Policy (`~/.heald/policy.json`)
+
+```bash
+heald policy
+heald policy --consent auto|ask|log
+heald policy --webhook-url 'https://hooks.slack.com/...' --enable-webhook
+heald policy --enable-safe-update
+```
+
+- **auto** — remediate  
+- **ask** — notify only  
+- **log** — log only  
+
+## CLI
+
+```bash
+heald run | doctor | status
+heald maintain --profile quick|deep
+heald heal | autofix | storage | free
+heald policy | compliance | sudo-setup [--write]
+```
+
+## Sudo ticket
+
+```bash
+sudo -v
+heald sudo-setup --write
+# review ~/.heald/sudoers.heald.draft → /etc/sudoers.d/heald
+```
+
+## Artifacts
+
+- `~/.heald/data/self_heal.json`
+- `~/.heald/data/fleet_ack.ndjson`
+- `~/.heald/compliance/compliance-latest.json`
+- `~/.heald/policy.json`

@@ -1,25 +1,29 @@
 import Foundation
 import OSLog
 
-/// HEAL-04: Detects crashed critical apps and restarts them.
+/// HEAL-04: Detects crashed critical apps and restarts them + crash-loop quarantine.
 struct CrashDetector {
     /// Apps to watch for crashes (configurable).
     static let watchList: [String] = [
         "Finder", "Dock", "SystemUIServer",
     ]
 
+    private let crashLoop = CrashLoopQuarantine()
+
     /// Check if watched apps are running, restart if missing.
     func check(activityLog: ActivityLog) async -> [String] {
         var restarted: [String] = []
+        let policy = await PolicyStore.shared.current()
 
         for appName in Self.watchList {
             if !isRunning(appName) {
                 Logger.health.warning("Crash detected: \(appName) not running")
+                await crashLoop.recordMissing(app: appName, policy: policy, activityLog: activityLog)
 
-                let success = restartApp(appName)
+                let success = policy.allowsRemediation() ? restartApp(appName) : false
                 let event = ActivityEvent(
                     type: success ? .processRestarted : .crashDetected,
-                    summary: success ? "Restarted \(appName)" : "Detected crash: \(appName) (restart failed)",
+                    summary: success ? "Restarted \(appName)" : "Detected crash: \(appName)",
                     beforeState: "\(appName) not running",
                     afterState: success ? "\(appName) restarted" : "\(appName) still not running"
                 )

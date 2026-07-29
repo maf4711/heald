@@ -20,74 +20,105 @@ struct SelfHealOrchestrator: Service {
         "disk_cleanup": 1800,
         "deep_trim": 3600,
         "firewall_on": 3600,
+        "filevault_warn": 86400,
         "proactive_heal": 1800,
         "notify_thermal": 1800,
         "brew_light": 7200,
     ]
 
+    private let batteryGuardian = BatteryGuardian()
+    private let networkHeal = NetworkSelfHeal()
+    private let safeUpdate = SafeSoftwareUpdate()
+
     func run() async throws {
         Logger.healer.info("SelfHealOrchestrator started (enterprise native — no Meister)")
+        _ = PolicyPack.load() // ensure default policy exists
         let state = HealCooldownState()
 
-        // First proactive pass shortly after boot
         try await Task.sleep(for: .seconds(20))
-        await fire(state: state, key: "proactive_heal", reason: "boot hygiene") {
-            await self.proactive.run(activityLog: self.activityLog)
+        let policy0 = await PolicyStore.shared.current()
+        if policy0.selfHealEnabled {
+            await fire(state: state, key: "proactive_heal", reason: "boot hygiene", policy: policy0) {
+                await self.proactive.run(activityLog: self.activityLog)
+            }
         }
 
+        var tick = 0
         while true {
             try await Task.sleep(for: .seconds(pollSeconds))
-            await evaluateAndHeal(state: state)
+            tick += 1
+            await PolicyStore.shared.reload()
+            await evaluateAndHeal(state: state, tick: tick)
         }
     }
 
-    private func evaluateAndHeal(state: HealCooldownState) async {
+    private func evaluateAndHeal(state: HealCooldownState, tick: Int) async {
+        let policy = await PolicyStore.shared.current()
+        guard policy.selfHealEnabled else {
+            await writeStatus(state: state, ram: await store.ram, disk: await store.disk, policy: policy)
+            return
+        }
+
         let ram = await store.ram
         let disk = await store.disk
         let thermal = await store.thermal
         let security = await store.security
 
-        // 1) RAM pressure
-        if ram.timestamp != .distantPast, ram.pressureLevel >= 2 {
-            await fire(state: state, key: "ram_purge", reason: "RAM pressure=\(ram.pressureLevel)") {
+        // Battery + network every ~3 min
+        if tick % 4 == 0 {
+            await batteryGuardian.evaluate(store: store, activityLog: activityLog, policy: policy)
+            await networkHeal.evaluate(store: store, activityLog: activityLog, policy: policy)
+        }
+        // Safe softwareupdate hourly-ish
+        if tick % 80 == 0 {
+            await safeUpdate.maybeRun(activityLog: activityLog, policy: policy)
+        }
+
+        // 1) RAM
+        if policy.ramPurgeEnabled, ram.timestamp != .distantPast,
+           ram.pressureLevel >= policy.ramPressureMin {
+            await fire(state: state, key: "ram_purge", reason: "RAM pressure=\(ram.pressureLevel)", policy: policy) {
                 await self.ramPurge.purge(activityLog: self.activityLog)
             }
-        } else if ram.timestamp != .distantPast, ram.swapUsed > 1_073_741_824 {
-            // >1 GB swap
-            await fire(state: state, key: "ram_purge", reason: "swap>\(Int(ram.swapUsed / 1_048_576))MB") {
+        } else if policy.ramPurgeEnabled, ram.timestamp != .distantPast, ram.swapUsed > 1_073_741_824 {
+            await fire(state: state, key: "ram_purge", reason: "swap>\(Int(ram.swapUsed / 1_048_576))MB", policy: policy) {
                 await self.ramPurge.purge(activityLog: self.activityLog)
             }
         }
 
-        // 2) Disk pressure
-        if let root = disk.volumes.first(where: { $0.mountPoint == "/" }),
+        // 2) Disk
+        if policy.diskCleanupEnabled,
+           let root = disk.volumes.first(where: { $0.mountPoint == "/" }),
            root.totalBytes > 0 {
             let freePct = Double(root.freeBytes) / Double(root.totalBytes) * 100
-            if freePct < 15 {
-                await fire(state: state, key: "disk_cleanup", reason: String(format: "disk free %.0f%%", freePct)) {
+            if freePct < policy.diskFreePctWarn {
+                await fire(state: state, key: "disk_cleanup", reason: String(format: "disk free %.0f%%", freePct), policy: policy) {
                     try? await self.cleaner.cleanCaches(activityLog: self.activityLog)
                     try? await self.cleaner.emptyTrash(activityLog: self.activityLog)
                     try? await self.cleaner.cleanXcodeDerivedData(activityLog: self.activityLog)
+                    await FleetAck.record(action: "disk_cleanup", result: "ok", detail: String(format: "%.0f%% free", freePct))
                 }
             }
-            if freePct < 8 {
-                await fire(state: state, key: "deep_trim", reason: String(format: "disk critical %.0f%%", freePct)) {
+            if freePct < policy.diskFreePctCritical {
+                await fire(state: state, key: "deep_trim", reason: String(format: "disk critical %.0f%%", freePct), policy: policy) {
                     await self.deepClean.run(activityLog: self.activityLog)
                     await self.autofix.brewCleanupLight(activityLog: self.activityLog)
                 }
             }
         }
 
-        // 3) Thermal serious/critical
+        // 3) Thermal
         if thermal.timestamp != .distantPast {
             switch thermal.thermalState {
             case .serious, .critical:
-                await fire(state: state, key: "notify_thermal", reason: "thermal \(thermal.thermalState.rawValue)") {
+                await fire(state: state, key: "notify_thermal", reason: "thermal \(thermal.thermalState.rawValue)", policy: policy) {
                     NotificationService.sendNotification(
                         title: "heald",
                         message: "Mac thermal \(thermal.thermalState.rawValue) — self-heal free RAM"
                     )
-                    await self.ramPurge.purge(activityLog: self.activityLog)
+                    if policy.ramPurgeEnabled {
+                        await self.ramPurge.purge(activityLog: self.activityLog)
+                    }
                 }
             case .nominal, .fair:
                 break
@@ -95,28 +126,62 @@ struct SelfHealOrchestrator: Service {
         }
 
         // 4) Firewall
-        if security.timestamp != .distantPast, !security.firewallEnabled {
-            await fire(state: state, key: "firewall_on", reason: "firewall disabled") {
+        if policy.firewallEnforce, security.timestamp != .distantPast, !security.firewallEnabled {
+            await fire(state: state, key: "firewall_on", reason: "firewall disabled", policy: policy) {
                 await self.autofix.enableFirewall(activityLog: self.activityLog)
+                await WebhookNotifier.shared.emit(title: "Firewall", text: "Enforced enable", severity: "warning")
             }
         }
 
-        // 5) Periodic proactive (uses longer cooldown)
-        await fire(state: state, key: "proactive_heal", reason: "scheduled proactive") {
+        // 5) FileVault warn only
+        if policy.fileVaultWarn, security.timestamp != .distantPast, !security.fileVaultEnabled {
+            await fire(state: state, key: "filevault_warn", reason: "FileVault off", policy: policy) {
+                NotificationService.sendNotification(
+                    title: "heald compliance",
+                    message: "FileVault is disabled — enable in System Settings"
+                )
+                await WebhookNotifier.shared.emit(
+                    title: "FileVault",
+                    text: "disabled on host",
+                    severity: "critical"
+                )
+            }
+        }
+
+        // 6) Proactive
+        await fire(state: state, key: "proactive_heal", reason: "scheduled proactive", policy: policy) {
             await self.proactive.run(activityLog: self.activityLog)
         }
 
-        await writeStatus(state: state, ram: ram, disk: disk)
+        await writeStatus(state: state, ram: ram, disk: disk, policy: policy)
     }
 
     private func fire(
         state: HealCooldownState,
         key: String,
         reason: String,
+        policy: PolicyPack,
         action: @escaping () async -> Void
     ) async {
         let cd = cooldowns[key] ?? 900
         guard await state.canFire(key: key, cooldown: cd) else { return }
+
+        // Consent: log-only never remediates; ask notifies and logs
+        if !policy.allowsRemediation() {
+            try? await activityLog.log(event: ActivityEvent(
+                type: .healingAttempt,
+                summary: "Self-heal BLOCKED by consent=\(policy.consent.rawValue): \(key)",
+                detail: reason
+            ))
+            if policy.consent == .ask {
+                NotificationService.sendNotification(
+                    title: "heald needs approval",
+                    message: "\(key): \(reason) — set policy consent=auto or heald policy --consent auto"
+                )
+            }
+            await state.markFired(key: key) // avoid spam
+            return
+        }
 
         Logger.healer.info("Self-heal [\(key)]: \(reason)")
         try? await activityLog.log(event: ActivityEvent(
@@ -132,16 +197,22 @@ struct SelfHealOrchestrator: Service {
             summary: "Self-heal done: \(key)",
             detail: reason
         ))
-        // Don't notify on every proactive_heal tick — only meaningful remediations
+        await FleetAck.record(action: key, result: "ok", detail: reason)
         if key != "proactive_heal" {
             NotificationService.sendNotification(
                 title: "heald self-heal",
                 message: "\(key): \(reason)"
             )
+            await WebhookNotifier.shared.emit(title: key, text: reason, severity: "info")
         }
     }
 
-    private func writeStatus(state: HealCooldownState, ram: RAMSnapshot, disk: DiskSnapshot) async {
+    private func writeStatus(
+        state: HealCooldownState,
+        ram: RAMSnapshot,
+        disk: DiskSnapshot,
+        policy: PolicyPack
+    ) async {
         let dir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".heald/data")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -157,6 +228,9 @@ struct SelfHealOrchestrator: Service {
             "ts": ISO8601DateFormatter().string(from: Date()),
             "edition": "enterprise",
             "meister_dependency": false,
+            "consent": policy.consent.rawValue,
+            "self_heal_enabled": policy.selfHealEnabled,
+            "sudo_ticket": SudoTicket.hasTicket(),
             "ram_pressure": ram.pressureLevel,
             "disk_free_pct": freePct,
             "last_actions": last,

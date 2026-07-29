@@ -81,6 +81,12 @@ struct MaintenanceService: Service {
                     selfHealingRunner: selfHealingRunner
                 )
             }
+
+            // Safe softwareupdate inside maintenance window (policy opt-in)
+            if minute < 5 {
+                let policy = await PolicyStore.shared.current()
+                await SafeSoftwareUpdate().maybeRun(activityLog: activityLog, policy: policy)
+            }
         }
     }
 

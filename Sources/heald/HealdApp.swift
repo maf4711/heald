@@ -5,11 +5,11 @@ import OSLog
 
 @main
 struct HealdApp: AsyncParsableCommand {
-    static let version = "3.0.0"
+    static let version = "3.1.0"
 
     static let configuration = CommandConfiguration(
         commandName: "heald",
-        abstract: "heald Enterprise — self-healing macOS daemon (no Meister dependency)",
+        abstract: "heald Enterprise — self-healing macOS (native, no Meister)",
         version: version,
         subcommands: [
             RunCommand.self,
@@ -20,7 +20,9 @@ struct HealdApp: AsyncParsableCommand {
             AutofixCommand.self,
             StorageCommand.self,
             FreeCommand.self,
-            UpdateCommand.self,
+            PolicyCommand.self,
+            ComplianceCommand.self,
+            SudoSetupCommand.self,
         ],
         defaultSubcommand: RunCommand.self
     )
@@ -36,6 +38,7 @@ struct RunCommand: AsyncParsableCommand {
 
     func run() async throws {
         Logger.lifecycle.info("heald \(HealdApp.version) enterprise starting")
+        _ = PolicyPack.load()
         let store = MetricsStore()
         let service = HealdService(store: store)
         let group = ServiceGroup(
@@ -53,15 +56,19 @@ struct RunCommand: AsyncParsableCommand {
 struct DoctorCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "doctor",
-        abstract: "Install + self-heal status"
+        abstract: "Install + self-heal + policy status"
     )
 
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
+        let policy = PolicyPack.load()
         print("heald doctor v\(HealdApp.version) — Enterprise")
         print(String(repeating: "─", count: 48))
         print("Edition:    enterprise (native self-heal)")
         print("Meister:    not required / not linked")
+        print("Consent:    \(policy.consent.rawValue)  selfHeal=\(policy.selfHealEnabled)")
+        print("Sudo ticket:\(SudoTicket.hasTicket() ? "yes" : "no — heald sudo-setup")")
+        print("Policy:     \(PolicyPack.policyURL.path)")
         print("Binary:     \(CommandLine.arguments.first ?? "heald")")
 
         let dataDir = FileManager.default.homeDirectoryForCurrentUser
@@ -71,15 +78,6 @@ struct DoctorCommand: AsyncParsableCommand {
         let installBin = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/heald/heald").path
         print("Install:    \(installBin) \(FileManager.default.isExecutableFile(atPath: installBin) ? "✓" : "missing")")
-
-        let apiKey = ProcessInfo.processInfo.environment["HEALD_API_KEY"] ?? ""
-        let apiURL = ProcessInfo.processInfo.environment["HEALD_API_URL"]
-            ?? "https://heald.sh/api/ingest"
-        print("API URL:    \(apiURL)")
-        print("API key:    \(apiKey.isEmpty ? "not set" : "set (\(apiKey.count) chars)")")
-        print("Update URL: \(AutoUpdateService.updateManifestURL())")
-        let autoOff = ProcessInfo.processInfo.environment["HEALD_AUTO_UPDATE"] == "0"
-        print("Auto-update:\(autoOff ? "disabled" : "enabled")\(AutoUpdateService.isManagedInstall() ? " (managed install)" : " (non-install path — daemon skip)")")
 
         let plist = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/LaunchAgents/com.heald.daemon.plist").path
@@ -102,78 +100,18 @@ struct DoctorCommand: AsyncParsableCommand {
         }
 
         print(String(repeating: "─", count: 48))
-        print("Self-heal:")
+        print("Features:   policy · crash-loop · battery · network · updates · webhooks · fleet-ack · compliance")
+        print("CLI:        maintain | heal | autofix | storage | free | policy | compliance | sudo-setup")
         let sh = dataDir.appendingPathComponent("self_heal.json")
         if let data = try? Data(contentsOf: sh),
            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            print("  status:     \(sh.path)")
-            if let p = obj["ram_pressure"] { print("  ram_pressure: \(p)") }
+            if let c = obj["consent"] { print("Self-heal:  consent=\(c)") }
+            if let p = obj["ram_pressure"] { print("            ram_pressure=\(p)") }
             if let d = obj["disk_free_pct"] as? Double, d >= 0 {
-                print(String(format: "  disk_free:   %.1f%%", d))
+                print(String(format: "            disk_free=%.1f%%", d))
             }
-            if let last = obj["last_actions"] as? [String: Any], !last.isEmpty {
-                print("  last_actions: \(last.keys.sorted().joined(separator: ", "))")
-            }
-        } else {
-            print("  status:     (waiting for first orchestrator tick)")
         }
-        print("  loop:       detect → remediate → log → notify (every ~45s)")
-        print("  schedule:   09:15 quick · Sun 10:30 deep · 02:00 benchmark")
         print(String(repeating: "─", count: 48))
-        print("CLI: heald maintain | heal | autofix | storage | free | update | status")
-    }
-}
-
-// MARK: - Update
-
-struct UpdateCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "update",
-        abstract: "Check heald.sh for a newer client binary and install it"
-    )
-
-    @Flag(name: .long, help: "Install even if remote version is not newer")
-    var force: Bool = false
-
-    @Flag(name: .long, help: "Only print remote vs local version")
-    var check: Bool = false
-
-    func run() async throws {
-        setvbuf(stdout, nil, _IOLBF, 0)
-        print("heald update v\(HealdApp.version)")
-        print("Manifest: \(AutoUpdateService.updateManifestURL())")
-
-        do {
-            let manifest = try await AutoUpdateService.fetchManifest()
-            print("Local:    \(HealdApp.version)")
-            print("Remote:   \(manifest.version)")
-            print("URL:      \(manifest.url)")
-            if let sha = manifest.sha256, !sha.isEmpty {
-                print("SHA256:   \(sha.prefix(16))…")
-            }
-            if let notes = manifest.notes, !notes.isEmpty {
-                print("Notes:    \(notes)")
-            }
-
-            if check {
-                let newer = AutoUpdateService.isNewer(manifest.version, than: HealdApp.version)
-                print(newer ? "Status:   update available" : "Status:   up to date")
-                throw ExitCode(newer ? 1 : 0)
-            }
-
-            let applied = try await AutoUpdateService.checkAndApply(force: force)
-            if applied {
-                print("Installed \(manifest.version) → \(AutoUpdateService.installBinaryURL().path)")
-                print("Restart daemon: launchctl kickstart -k \"gui/$(id -u)/com.heald.daemon\"")
-            } else {
-                print("Already up to date.")
-            }
-        } catch let code as ExitCode {
-            throw code
-        } catch {
-            print("Error: \(error.localizedDescription)")
-            throw ExitCode(1)
-        }
     }
 }
 
@@ -182,7 +120,7 @@ struct UpdateCommand: AsyncParsableCommand {
 struct StatusCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "status",
-        abstract: "Self-heal status JSON + summary"
+        abstract: "Self-heal status JSON"
     )
 
     func run() async throws {
@@ -197,29 +135,21 @@ struct StatusCommand: AsyncParsableCommand {
     }
 }
 
-// MARK: - Maintain
+// MARK: - Maintain / Heal / Autofix / Storage / Free (unchanged native)
 
 struct MaintainCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "maintain",
         abstract: "Run native quick|deep maintenance now"
     )
-
     @Option(name: .shortAndLong, help: "quick|deep")
     var profile: String = "quick"
 
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
-        let logPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".heald/data/activity.ndjson").path
-        try? FileManager.default.createDirectory(
-            atPath: (logPath as NSString).deletingLastPathComponent,
-            withIntermediateDirectories: true
-        )
-        let activityLog = try ActivityLog(path: logPath)
+        let activityLog = try openActivityLog()
         let ai = AppleIntelligenceClient()
         await ai.checkAvailability()
-
         print("heald maintain —\(profile) (native enterprise)...")
         switch profile.lowercased() {
         case "quick":
@@ -234,18 +164,15 @@ struct MaintainCommand: AsyncParsableCommand {
     }
 }
 
-// MARK: - Heal / Autofix / Storage / Free
-
 struct HealCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "heal",
-        abstract: "Run proactive healer now (symlinks, orphans, .DS_Store)"
+        abstract: "Proactive healer now"
     )
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
-        let log = try openActivityLog()
-        print("heald heal (proactive)...")
-        await ProactiveHealer().run(activityLog: log)
+        print("heald heal...")
+        await ProactiveHealer().run(activityLog: try openActivityLog())
         print("done")
     }
 }
@@ -253,7 +180,7 @@ struct HealCommand: AsyncParsableCommand {
 struct AutofixCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "autofix",
-        abstract: "Deterministic autofix (orphans, firewall, brew cleanup light)"
+        abstract: "Deterministic autofix now"
     )
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
@@ -270,7 +197,7 @@ struct AutofixCommand: AsyncParsableCommand {
 struct StorageCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "storage",
-        abstract: "Safe-to-delete size report (read-only)"
+        abstract: "Safe-to-delete size report"
     )
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
@@ -281,14 +208,116 @@ struct StorageCommand: AsyncParsableCommand {
 struct FreeCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "free",
-        abstract: "Attempt RAM purge (sudo -n purge if available)"
+        abstract: "RAM purge (sudo ticket)"
     )
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
-        let log = try openActivityLog()
         print("heald free...")
-        await RAMPurge().purge(activityLog: log)
+        await RAMPurge().purge(activityLog: try openActivityLog())
         print("done")
+    }
+}
+
+// MARK: - Policy
+
+struct PolicyCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "policy",
+        abstract: "Show or set enterprise policy (consent, webhooks, thresholds)"
+    )
+
+    @Option(name: .long, help: "auto|ask|log")
+    var consent: String?
+
+    @Flag(name: .long, help: "Enable Slack webhook path (set URL in file)")
+    var enableWebhook: Bool = false
+
+    @Option(name: .long, help: "Slack incoming webhook URL")
+    var webhookURL: String?
+
+    @Flag(name: .long, help: "Opt-in safe softwareupdate in maintenance window")
+    var enableSafeUpdate: Bool = false
+
+    @Flag(name: .long, help: "Print path and exit")
+    var path: Bool = false
+
+    func run() async throws {
+        setvbuf(stdout, nil, _IOLBF, 0)
+        if path {
+            print(PolicyPack.policyURL.path)
+            return
+        }
+        var p = PolicyPack.load()
+        var changed = false
+        if let c = consent, let mode = ConsentMode(rawValue: c) {
+            p.consent = mode
+            changed = true
+        }
+        if enableWebhook {
+            p.webhookEnabled = true
+            changed = true
+        }
+        if let u = webhookURL {
+            p.slackWebhookURL = u
+            p.webhookEnabled = true
+            changed = true
+        }
+        if enableSafeUpdate {
+            p.safeSoftwareUpdate = true
+            changed = true
+        }
+        if changed {
+            p.save()
+            await PolicyStore.shared.reload()
+            print("Policy updated → \(PolicyPack.policyURL.path)")
+        }
+        if let data = try? Data(contentsOf: PolicyPack.policyURL),
+           let s = String(data: data, encoding: .utf8) {
+            print(s)
+        }
+    }
+}
+
+// MARK: - Compliance
+
+struct ComplianceCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "compliance",
+        abstract: "Export compliance inventory JSON"
+    )
+
+    func run() async throws {
+        setvbuf(stdout, nil, _IOLBF, 0)
+        let store = MetricsStore()
+        // best-effort one-shot collectors would be heavy; export current store zeros + live shell
+        let url = await ComplianceExport.write(store: store)
+        // enrich with live security via existing checkers? minimal: print path + body
+        if let s = try? String(contentsOf: url, encoding: .utf8) {
+            print(s)
+        }
+        fputs("wrote \(url.path)\n", stderr)
+    }
+}
+
+// MARK: - Sudo setup
+
+struct SudoSetupCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "sudo-setup",
+        abstract: "Sudo ticket instructions / draft sudoers for enterprise heals"
+    )
+
+    @Flag(name: .long, help: "Write ~/.heald/sudoers.heald.draft")
+    var write: Bool = false
+
+    func run() async throws {
+        setvbuf(stdout, nil, _IOLBF, 0)
+        print(SudoTicket.setupInstructions())
+        print("Current ticket: \(SudoTicket.hasTicket() ? "ACTIVE" : "none")")
+        if write {
+            let url = SudoTicket.writeDraft()
+            print("Draft written: \(url.path)")
+        }
     }
 }
 
@@ -303,3 +332,4 @@ private func openActivityLog() throws -> ActivityLog {
     )
     return try ActivityLog(path: path)
 }
+

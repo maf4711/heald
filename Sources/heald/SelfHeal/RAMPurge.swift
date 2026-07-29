@@ -7,8 +7,11 @@ struct RAMPurge: Sendable {
         // Always drop purgeable memory hints via memory pressure simulation is invasive.
         // Prefer `purge` when passwordless sudo works; else notify only.
         let before = freeMB()
-        let purge = ShellRunner.run("/usr/bin/sudo", arguments: ["-n", "purge"])
+        let purge = SudoTicket.hasTicket()
+            ? SudoTicket.runPrivileged("/usr/sbin/purge")
+            : ShellRunner.run("/usr/bin/sudo", arguments: ["-n", "/usr/sbin/purge"])
         if purge.succeeded {
+            await FleetAck.record(action: "ram_purge", result: "ok")
             let after = freeMB()
             let delta = after - before
             let summary = "RAM purge: free \(before)→\(after) MB (Δ\(delta))"
