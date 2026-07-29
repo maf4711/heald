@@ -42,4 +42,4 @@ xcodebuild -scheme Heald -destination 'platform=iOS Simulator,name=iPad Pro 13-i
 
 ## Bundle ID
 
-`com.heald.app` · Display name **Heald** · Version **2.0.0**
+`com.merados.heald.app (ASC; display name Heald)` · Display name **Heald** · Version **2.0.0**

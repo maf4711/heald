@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>ApplicationProperties</key>
+	<dict>
+		<key>ApplicationPath</key>
+		<string>Applications/Heald.app</string>
+		<key>Architectures</key>
+		<array>
+			<string>arm64</string>
+		</array>
+		<key>CFBundleIdentifier</key>
+		<string>com.merados.heald.app</string>
+		<key>CFBundleShortVersionString</key>
+		<string>1.0</string>
+		<key>CFBundleVersion</key>
+		<string>1</string>
+		<key>SigningIdentity</key>
+		<string>Apple Development: Created via API (DLC56TFN8B)</string>
+		<key>Team</key>
+		<string>K63X3ZTV3Q</string>
+	</dict>
+	<key>ArchiveVersion</key>
+	<integer>2</integer>
+	<key>CreationDate</key>
+	<date>2026-07-29T13:31:29Z</date>
+	<key>Distributions</key>
+	<array>
+		<dict>
+			<key>adamId</key>
+			<string>6795952846</string>
+			<key>certificateSHA1</key>
+			<string>7CA0CA7E2072B965985FCD7EC080C14C26582803</string>
+			<key>destination</key>
+			<string>upload</string>
+			<key>identifier</key>
+			<string>0ab4b532-5317-4dc6-8aae-9c58454671ad</string>
+			<key>preparationEvent</key>
+			<dict>
+				<key>date</key>
+				<string>2026-07-29T13:31:30Z</string>
+				<key>errors</key>
+				<array/>
+				<key>infoMessages</key>
+				<array/>
+				<key>shortTitle</key>
+				<string>Prepared</string>
+				<key>state</key>
+				<string>success</string>
+				<key>title</key>
+				<string>Prepared archive for uploading</string>
+				<key>warnings</key>
+				<array/>
+			</dict>
+			<key>providerId</key>
+			<string>18daeaec-9343-4c57-9b01-481a7da981c6</string>
+			<key>task</key>
+			<string>distribute</string>
+			<key>teamID</key>
+			<string>K63X3ZTV3Q</string>
+			<key>uploadDestination</key>
+			<string>App Store</string>
+			<key>uploadEvent</key>
+			<dict>
+				<key>date</key>
+				<string>2026-07-29T13:32:52Z</string>
+				<key>errors</key>
+				<array/>
+				<key>infoMessages</key>
+				<array/>
+				<key>shortTitle</key>
+				<string>Uploaded</string>
+				<key>state</key>
+				<string>success</string>
+				<key>title</key>
+				<string>Uploaded to Apple</string>
+				<key>warnings</key>
+				<array/>
+			</dict>
+			<key>uploadedBuildNumber</key>
+			<string>1</string>
+		</dict>
+	</array>
+	<key>Name</key>
+	<string>Heald</string>
+	<key>SchemeName</key>
+	<string>Heald</string>
+</dict>
+</plist>
