@@ -232,7 +232,6 @@ async function writeBlobCache(snap: StoreSnapshot) {
       addRandomSuffix: false,
       token,
       contentType: "application/json",
-      allowOverwrite: true,
     });
   } catch {
     /* optional */
