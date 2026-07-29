@@ -10,4 +10,5 @@ extension Logger {
     static let ai         = Logger(subsystem: "com.heald.daemon", category: "ai")
     static let maintenance = Logger(subsystem: "com.heald.daemon", category: "maintenance")
     static let benchmark  = Logger(subsystem: "com.heald.daemon", category: "benchmark")
+    static let update     = Logger(subsystem: "com.heald.daemon", category: "update")
 }

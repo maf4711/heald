@@ -20,6 +20,7 @@ struct HealdApp: AsyncParsableCommand {
             AutofixCommand.self,
             StorageCommand.self,
             FreeCommand.self,
+            UpdateCommand.self,
         ],
         defaultSubcommand: RunCommand.self
     )
@@ -71,6 +72,15 @@ struct DoctorCommand: AsyncParsableCommand {
             .appendingPathComponent("Library/heald/heald").path
         print("Install:    \(installBin) \(FileManager.default.isExecutableFile(atPath: installBin) ? "✓" : "missing")")
 
+        let apiKey = ProcessInfo.processInfo.environment["HEALD_API_KEY"] ?? ""
+        let apiURL = ProcessInfo.processInfo.environment["HEALD_API_URL"]
+            ?? "https://heald.sh/api/ingest"
+        print("API URL:    \(apiURL)")
+        print("API key:    \(apiKey.isEmpty ? "not set" : "set (\(apiKey.count) chars)")")
+        print("Update URL: \(AutoUpdateService.updateManifestURL())")
+        let autoOff = ProcessInfo.processInfo.environment["HEALD_AUTO_UPDATE"] == "0"
+        print("Auto-update:\(autoOff ? "disabled" : "enabled")\(AutoUpdateService.isManagedInstall() ? " (managed install)" : " (non-install path — daemon skip)")")
+
         let plist = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/LaunchAgents/com.heald.daemon.plist").path
         print("LaunchAgent:\(plist) \(FileManager.default.fileExists(atPath: plist) ? "✓" : "missing")")
@@ -110,7 +120,60 @@ struct DoctorCommand: AsyncParsableCommand {
         print("  loop:       detect → remediate → log → notify (every ~45s)")
         print("  schedule:   09:15 quick · Sun 10:30 deep · 02:00 benchmark")
         print(String(repeating: "─", count: 48))
-        print("CLI: heald maintain | heal | autofix | storage | free | status")
+        print("CLI: heald maintain | heal | autofix | storage | free | update | status")
+    }
+}
+
+// MARK: - Update
+
+struct UpdateCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "update",
+        abstract: "Check heald.sh for a newer client binary and install it"
+    )
+
+    @Flag(name: .long, help: "Install even if remote version is not newer")
+    var force: Bool = false
+
+    @Flag(name: .long, help: "Only print remote vs local version")
+    var check: Bool = false
+
+    func run() async throws {
+        setvbuf(stdout, nil, _IOLBF, 0)
+        print("heald update v\(HealdApp.version)")
+        print("Manifest: \(AutoUpdateService.updateManifestURL())")
+
+        do {
+            let manifest = try await AutoUpdateService.fetchManifest()
+            print("Local:    \(HealdApp.version)")
+            print("Remote:   \(manifest.version)")
+            print("URL:      \(manifest.url)")
+            if let sha = manifest.sha256, !sha.isEmpty {
+                print("SHA256:   \(sha.prefix(16))…")
+            }
+            if let notes = manifest.notes, !notes.isEmpty {
+                print("Notes:    \(notes)")
+            }
+
+            if check {
+                let newer = AutoUpdateService.isNewer(manifest.version, than: HealdApp.version)
+                print(newer ? "Status:   update available" : "Status:   up to date")
+                throw ExitCode(newer ? 1 : 0)
+            }
+
+            let applied = try await AutoUpdateService.checkAndApply(force: force)
+            if applied {
+                print("Installed \(manifest.version) → \(AutoUpdateService.installBinaryURL().path)")
+                print("Restart daemon: launchctl kickstart -k \"gui/$(id -u)/com.heald.daemon\"")
+            } else {
+                print("Already up to date.")
+            }
+        } catch let code as ExitCode {
+            throw code
+        } catch {
+            print("Error: \(error.localizedDescription)")
+            throw ExitCode(1)
+        }
     }
 }
 

@@ -26,34 +26,68 @@ echo ""
 echo -e "${B}heald${R} installer — ${C}${HOSTNAME_SHORT}${R} (${USERNAME})"
 echo -e "${D}Self-healing macOS daemon with fleet dashboard${R}"
 
-# ── 1. Download binary ────────────────────────────────────
+# ── 1. Download binary (version-aware auto-update) ────────
 step 1 "Binary"
 mkdir -p "$INSTALL_DIR"
 
+UPDATE_API="${HEALD_UPDATE_URL:-https://heald.sh/api/update}"
+REMOTE_VERSION=""
+REMOTE_URL="$RELEASE_URL"
+REMOTE_SHA=""
+
+if META=$(curl -fsSL --max-time 10 "$UPDATE_API" 2>/dev/null); then
+    REMOTE_VERSION=$(printf '%s' "$META" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('version') or '')" 2>/dev/null || true)
+    U=$(printf '%s' "$META" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('url') or '')" 2>/dev/null || true)
+    REMOTE_SHA=$(printf '%s' "$META" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('sha256') or '')" 2>/dev/null || true)
+    if [ -n "$U" ]; then REMOTE_URL="$U"; fi
+    if [ -n "$REMOTE_VERSION" ]; then
+        ok "server latest: v${REMOTE_VERSION}"
+    fi
+else
+    warn "update API unreachable — falling back to GitHub latest"
+fi
+
+LOCAL_VERSION=""
+if [ -x "$BINARY" ]; then
+    LOCAL_VERSION=$("$BINARY" --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 || true)
+fi
+
 NEED_DOWNLOAD=true
-if [ -f "$BINARY" ]; then
+if [ -f "$BINARY" ] && [ -n "$LOCAL_VERSION" ] && [ -n "$REMOTE_VERSION" ] && [ "$LOCAL_VERSION" = "$REMOTE_VERSION" ]; then
     SIZE=$(stat -f%z "$BINARY" 2>/dev/null || echo "0")
     if [ "$SIZE" -gt 1000000 ]; then
-        ok "already installed ($(du -h "$BINARY" | cut -f1))"
+        ok "up to date v${LOCAL_VERSION} ($(du -h "$BINARY" | cut -f1))"
         NEED_DOWNLOAD=false
     fi
+elif [ -f "$BINARY" ] && [ -n "$LOCAL_VERSION" ] && [ -n "$REMOTE_VERSION" ]; then
+    echo -e "  Updating ${C}v${LOCAL_VERSION}${R} → ${C}v${REMOTE_VERSION}${R}"
+elif [ -f "$BINARY" ]; then
+    echo -e "  Refreshing installed binary..."
 fi
 
 if $NEED_DOWNLOAD; then
-    # Check Homebrew first
-    BREW_BIN=""
-    if command -v brew &>/dev/null; then
-        BREW_BIN="$(brew --prefix heald 2>/dev/null)/bin/heald" 2>/dev/null || true
+    TMP="${BINARY}.download"
+    echo -e "  Downloading..."
+    curl -L --progress-bar "$REMOTE_URL" -o "$TMP"
+    if ! file "$TMP" | grep -q "Mach-O"; then
+        echo -e "  \033[31mError: not a valid macOS binary\033[0m"
+        file "$TMP"
+        rm -f "$TMP"
+        exit 1
     fi
-
-    if [ -n "$BREW_BIN" ] && [ -f "$BREW_BIN" ]; then
-        cp "$BREW_BIN" "$BINARY"
-        ok "copied from Homebrew"
-    else
-        echo -e "  Downloading from GitHub..."
-        curl -L --progress-bar "$RELEASE_URL" -o "$BINARY"
-        ok "downloaded ($(du -h "$BINARY" | cut -f1))"
+    if [ -n "$REMOTE_SHA" ]; then
+        ACTUAL=$(shasum -a 256 "$TMP" | awk '{print $1}')
+        if [ "$(printf '%s' "$ACTUAL" | tr '[:upper:]' '[:lower:]')" != "$(printf '%s' "$REMOTE_SHA" | tr '[:upper:]' '[:lower:]')" ]; then
+            echo -e "  \033[31mError: SHA-256 mismatch\033[0m"
+            echo -e "  expected $REMOTE_SHA"
+            echo -e "  got      $ACTUAL"
+            rm -f "$TMP"
+            exit 1
+        fi
+        ok "sha256 verified"
     fi
+    mv -f "$TMP" "$BINARY"
+    ok "installed ($(du -h "$BINARY" | cut -f1)${REMOTE_VERSION:+ v$REMOTE_VERSION})"
 fi
 chmod 755 "$BINARY"
 

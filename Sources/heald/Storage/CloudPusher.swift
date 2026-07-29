@@ -137,6 +137,7 @@ struct CloudPusher: Service {
         var metrics: [String: Any] = [
             "machineId": machineId,
             "hostname": Host.current().localizedName ?? machineName(),
+            "clientVersion": HealdApp.version,
             "cpu": cpuDict,
             "ram": ramDict,
             "disk": diskDict,
