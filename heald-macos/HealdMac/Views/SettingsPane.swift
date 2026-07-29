@@ -2,7 +2,7 @@ import SwiftUI
 
 struct SettingsPane: View {
     @Environment(AppState.self) private var appState
-    @AppStorage("heald_api_url") private var apiURL = "https://heald.merados.com"
+    @AppStorage("heald_api_url") private var apiURL = "https://heald.sh"
     @AppStorage("heald_api_key") private var apiKey = "REDACTED"
     @AppStorage("heald_refresh_interval") private var refreshInterval = 10.0
     @State private var isTesting = false

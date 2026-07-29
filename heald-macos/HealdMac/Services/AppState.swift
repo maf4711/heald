@@ -29,7 +29,7 @@ final class AppState {
         let defaults = UserDefaults.standard
         if defaults.string(forKey: Keys.apiKey) == nil {
             defaults.set("REDACTED", forKey: Keys.apiKey)
-            defaults.set("https://heald.merados.com", forKey: Keys.apiURL)
+            defaults.set("https://heald.sh", forKey: Keys.apiURL)
             print("[AppState] Set default API configuration")
         }
     }

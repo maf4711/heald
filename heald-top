@@ -4,7 +4,7 @@
 
 set -u
 
-API_URL="${HEALD_API_URL:-https://heald.merados.com}"
+API_URL="${HEALD_API_URL:-https://heald.sh}"
 INTERVAL=5
 
 while [[ $# -gt 0 ]]; do

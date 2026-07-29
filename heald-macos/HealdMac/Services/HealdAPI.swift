@@ -4,7 +4,7 @@ actor HealdAPI {
     static let shared = HealdAPI()
 
     private var baseURL: String {
-        UserDefaults.standard.string(forKey: "heald_api_url") ?? "https://heald.merados.com"
+        UserDefaults.standard.string(forKey: "heald_api_url") ?? "https://heald.sh"
     }
 
     private var apiKey: String {

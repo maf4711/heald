@@ -74,7 +74,7 @@ struct DoctorCommand: AsyncParsableCommand {
 
         let apiKey = ProcessInfo.processInfo.environment["HEALD_API_KEY"] ?? ""
         let apiURL = ProcessInfo.processInfo.environment["HEALD_API_URL"]
-            ?? "https://heald.merados.com/api/ingest"
+            ?? "https://heald.sh/api/ingest"
         print("API URL:    \(apiURL)")
         print("API key:    \(apiKey.isEmpty ? "not set (cloud push disabled)" : "set (\(apiKey.count) chars)")")
 

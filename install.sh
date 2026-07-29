@@ -12,8 +12,8 @@ USER_ID=$(id -u)
 USERNAME=$(whoami)
 HOSTNAME_SHORT=$(hostname -s)
 API_KEY="REDACTED"
-API_URL="https://heald.merados.com/api/ingest"
-DASHBOARD="https://heald.merados.com"
+API_URL="https://heald.sh/api/ingest"
+DASHBOARD="https://heald.sh"
 RELEASE_URL="https://github.com/maf4711/heald/releases/latest/download/heald"
 
 B="\033[1m" G="\033[32m" Y="\033[33m" C="\033[36m" D="\033[2m" R="\033[0m"

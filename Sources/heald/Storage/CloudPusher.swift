@@ -12,7 +12,7 @@ struct CloudPusher: Service {
     private static let maxBufferSize = 100
 
     // Configuration from environment or defaults
-    private var apiURL: String { ProcessInfo.processInfo.environment["HEALD_API_URL"] ?? "https://heald.merados.com/api/ingest" }
+    private var apiURL: String { ProcessInfo.processInfo.environment["HEALD_API_URL"] ?? "https://heald.sh/api/ingest" }
     private var apiKey: String { ProcessInfo.processInfo.environment["HEALD_API_KEY"] ?? "" }
     private var machineId: String { ProcessInfo.processInfo.environment["HEALD_MACHINE_ID"] ?? machineName() }
 

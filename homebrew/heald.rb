@@ -59,7 +59,7 @@ class Heald < Formula
       Terminal dashboard:
         heald-top
 
-      Web dashboard: https://heald.merados.com
+      Web dashboard: https://heald.sh
     EOS
   end
 

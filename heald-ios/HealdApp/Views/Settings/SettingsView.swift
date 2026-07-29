@@ -4,7 +4,7 @@ struct SettingsView: View {
     var isOnboarding = false
 
     @Environment(AppState.self) private var appState
-    @AppStorage("heald_api_url") private var apiURL = "https://heald.merados.com"
+    @AppStorage("heald_api_url") private var apiURL = "https://heald.sh"
     @AppStorage("heald_api_key") private var apiKey = "REDACTED"
     @AppStorage("heald_refresh_interval") private var refreshInterval = 10.0
     @AppStorage("heald_notifications_enabled") private var notificationsEnabled = true
@@ -35,7 +35,7 @@ struct SettingsView: View {
                         Text("API URL")
                             .font(.caption)
                             .foregroundStyle(Theme.textTertiary)
-                        TextField("https://heald.merados.com", text: currentURL)
+                        TextField("https://heald.sh", text: currentURL)
                             .font(.subheadline.monospaced())
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()

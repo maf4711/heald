@@ -263,7 +263,7 @@ if events:
         o.append(f"  {D}{ev_ts}{R} {color}{summary}{R} {D}{machine_id}{R}\n")
 
 # Footer
-o.append(f"\n{D}q:quit  r:refresh  heald.merados.com  interval:{interval}s{R}")
+o.append(f"\n{D}q:quit  r:refresh  heald.sh  interval:{interval}s{R}")
 
 sys.stdout.write("".join(o))
 sys.stdout.flush()

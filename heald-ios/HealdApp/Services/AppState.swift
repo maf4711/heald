@@ -23,7 +23,7 @@ final class AppState {
         if defaults.string(forKey: apiKeyKey) == nil {
             print("[AppState] Setze Default-API-Konfiguration.")
             defaults.set("REDACTED", forKey: apiKeyKey)
-            defaults.set("https://heald.merados.com", forKey: apiURLKey)
+            defaults.set("https://heald.sh", forKey: apiURLKey)
             defaults.set(true, forKey: configuredKey)
         }
     }
