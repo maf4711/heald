@@ -1,5 +1,12 @@
-// In-memory store for metrics (Vercel serverless — no persistent state).
-// For production, swap with Vercel KV / Postgres / Turso.
+// Fleet metrics store for serverless (Vercel).
+// Strategy:
+// 1. globalThis singleton — survives warm invocations on the same isolate
+// 2. Atomic /tmp JSON cache — recovers when the same machine reuses /tmp
+// 3. Optional Vercel Blob (BLOB_READ_WRITE_TOKEN) — cross-instance durability
+
+import { readFileSync, writeFileSync, renameSync, existsSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 
 export interface MachineMetrics {
   machineId: string;
@@ -56,6 +63,7 @@ export interface MachineMetrics {
     diskFreeGB: number;
     birdRunning: boolean;
   };
+  [key: string]: unknown;
 }
 
 export interface ProcessEntry {
@@ -86,117 +94,244 @@ export interface ActivityEntry {
   aiGenerated: boolean;
 }
 
-// In-memory maps with /tmp file-cache for Vercel cold-start recovery.
-// On cold start, the in-memory store is empty but /tmp may still have data
-// from the previous invocation on the same serverless instance.
+type HistoryPoint = { timestamp: string; cpu: number; ramUsedGB: number };
 
-import { readFileSync, writeFileSync } from "fs";
+type StoreSnapshot = {
+  machines: Record<string, MachineMetrics>;
+  events: ActivityEntry[];
+  history: Record<string, HistoryPoint[]>;
+  benchmarks: Record<string, BenchmarkResult[]>;
+  savedAt: string;
+};
 
-const CACHE_FILE = "/tmp/heald-store.json";
-
-const machines = new Map<string, MachineMetrics>();
-const events: ActivityEntry[] = [];
-const metricsHistory = new Map<string, { timestamp: string; cpu: number; ramUsedGB: number }[]>();
-const benchmarkHistory = new Map<string, BenchmarkResult[]>();
+type StoreState = {
+  machines: Map<string, MachineMetrics>;
+  events: ActivityEntry[];
+  metricsHistory: Map<string, HistoryPoint[]>;
+  benchmarkHistory: Map<string, BenchmarkResult[]>;
+  hydrated: boolean;
+  lastPersistMs: number;
+};
 
 const MAX_EVENTS = 1000;
 const MAX_HISTORY_PER_MACHINE = 720;
 const MAX_BENCHMARK_HISTORY = 90;
+const PERSIST_MIN_INTERVAL_MS = 2000;
+const CACHE_FILE = join(tmpdir(), "heald-store.json");
+const BLOB_PATHNAME = "heald-fleet-store.json";
 
-// --- Persistence: /tmp file cache ---
-function persistToCache() {
-  try {
-    const data = {
-      machines: Object.fromEntries(machines),
-      events: events.slice(0, 100),
-      history: Object.fromEntries(metricsHistory),
-      benchmarks: Object.fromEntries(benchmarkHistory),
+const g = globalThis as typeof globalThis & { __healdStore?: StoreState };
+
+function state(): StoreState {
+  if (!g.__healdStore) {
+    g.__healdStore = {
+      machines: new Map(),
+      events: [],
+      metricsHistory: new Map(),
+      benchmarkHistory: new Map(),
+      hydrated: false,
+      lastPersistMs: 0,
     };
-    writeFileSync(CACHE_FILE, JSON.stringify(data));
-  } catch { /* best effort */ }
+  }
+  return g.__healdStore;
 }
 
-function restoreFromCache() {
-  if (machines.size > 0) return; // already populated
+function snapshotFromState(s: StoreState): StoreSnapshot {
+  return {
+    machines: Object.fromEntries(s.machines),
+    events: s.events.slice(0, 200),
+    history: Object.fromEntries(s.metricsHistory),
+    benchmarks: Object.fromEntries(s.benchmarkHistory),
+    savedAt: new Date().toISOString(),
+  };
+}
+
+function applySnapshot(s: StoreState, data: Partial<StoreSnapshot>) {
+  if (data.machines) {
+    for (const [k, v] of Object.entries(data.machines)) {
+      const existing = s.machines.get(k);
+      if (!existing || (v.lastSeen && v.lastSeen >= (existing.lastSeen ?? ""))) {
+        s.machines.set(k, v);
+      }
+    }
+  }
+  if (data.events?.length) {
+    const seen = new Set(s.events.map((e) => `${e.timestamp}|${e.machineId}|${e.type}|${e.summary}`));
+    for (const e of data.events) {
+      const key = `${e.timestamp}|${e.machineId}|${e.type}|${e.summary}`;
+      if (!seen.has(key)) {
+        s.events.push(e);
+        seen.add(key);
+      }
+    }
+    s.events.sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
+    if (s.events.length > MAX_EVENTS) s.events.length = MAX_EVENTS;
+  }
+  if (data.history) {
+    for (const [k, v] of Object.entries(data.history)) {
+      if (!s.metricsHistory.has(k) || (s.metricsHistory.get(k)?.length ?? 0) < v.length) {
+        s.metricsHistory.set(k, v);
+      }
+    }
+  }
+  if (data.benchmarks) {
+    for (const [k, v] of Object.entries(data.benchmarks)) {
+      if (!s.benchmarkHistory.has(k) || (s.benchmarkHistory.get(k)?.length ?? 0) < v.length) {
+        s.benchmarkHistory.set(k, v);
+      }
+    }
+  }
+}
+
+function readTmpCache(): StoreSnapshot | null {
   try {
-    const raw = readFileSync(CACHE_FILE, "utf-8");
-    const data = JSON.parse(raw);
-    if (data.machines) {
-      for (const [k, v] of Object.entries(data.machines)) {
-        machines.set(k, v as MachineMetrics);
-      }
-    }
-    if (data.events) {
-      events.push(...(data.events as ActivityEntry[]));
-    }
-    if (data.history) {
-      for (const [k, v] of Object.entries(data.history)) {
-        metricsHistory.set(k, v as { timestamp: string; cpu: number; ramUsedGB: number }[]);
-      }
-    }
-    if (data.benchmarks) {
-      for (const [k, v] of Object.entries(data.benchmarks)) {
-        benchmarkHistory.set(k, v as BenchmarkResult[]);
-      }
-    }
-  } catch { /* no cache yet */ }
+    if (!existsSync(CACHE_FILE)) return null;
+    return JSON.parse(readFileSync(CACHE_FILE, "utf-8")) as StoreSnapshot;
+  } catch {
+    return null;
+  }
 }
 
-// Restore on module load
-restoreFromCache();
+function writeTmpCache(snap: StoreSnapshot) {
+  try {
+    const tmp = `${CACHE_FILE}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify(snap));
+    renameSync(tmp, CACHE_FILE);
+  } catch {
+    try {
+      writeFileSync(CACHE_FILE, JSON.stringify(snap));
+    } catch {
+      /* best effort */
+    }
+  }
+}
 
-export function upsertMachine(data: MachineMetrics) {
-  machines.set(data.machineId, { ...data, lastSeen: new Date().toISOString() });
+async function readBlobCache(): Promise<StoreSnapshot | null> {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token) return null;
+  try {
+    const { list } = await import("@vercel/blob");
+    const { blobs } = await list({ prefix: BLOB_PATHNAME, limit: 5, token });
+    const hit = blobs.find((b) => b.pathname === BLOB_PATHNAME) ?? blobs[0];
+    if (!hit?.url) return null;
+    const res = await fetch(hit.url, { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as StoreSnapshot;
+  } catch {
+    return null;
+  }
+}
 
-  const history = metricsHistory.get(data.machineId) ?? [];
+async function writeBlobCache(snap: StoreSnapshot) {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token) return;
+  try {
+    const { put } = await import("@vercel/blob");
+    await put(BLOB_PATHNAME, JSON.stringify(snap), {
+      access: "public",
+      addRandomSuffix: false,
+      token,
+      contentType: "application/json",
+      allowOverwrite: true,
+    });
+  } catch {
+    /* optional */
+  }
+}
+
+async function hydrate() {
+  const s = state();
+  if (s.hydrated && s.machines.size > 0) return;
+
+  const tmp = readTmpCache();
+  if (tmp) applySnapshot(s, tmp);
+
+  if (s.machines.size === 0) {
+    const blob = await readBlobCache();
+    if (blob) {
+      applySnapshot(s, blob);
+      writeTmpCache(snapshotFromState(s));
+    }
+  }
+
+  s.hydrated = true;
+}
+
+function persist(force = false) {
+  const s = state();
+  const now = Date.now();
+  if (!force && now - s.lastPersistMs < PERSIST_MIN_INTERVAL_MS) return;
+  s.lastPersistMs = now;
+  const snap = snapshotFromState(s);
+  writeTmpCache(snap);
+  // Fire-and-forget blob write
+  void writeBlobCache(snap);
+}
+
+export async function upsertMachine(data: MachineMetrics) {
+  await hydrate();
+  const s = state();
+  const machineId = data.machineId || data.hostname || "unknown";
+  const payload: MachineMetrics = {
+    ...data,
+    machineId,
+    lastSeen: new Date().toISOString(),
+  };
+  s.machines.set(machineId, payload);
+
+  const history = s.metricsHistory.get(machineId) ?? [];
   history.push({
-    timestamp: new Date().toISOString(),
-    cpu: data.cpu.overall,
-    ramUsedGB: data.ram.usedGB,
+    timestamp: payload.lastSeen,
+    cpu: data.cpu?.overall ?? 0,
+    ramUsedGB: data.ram?.usedGB ?? 0,
   });
   if (history.length > MAX_HISTORY_PER_MACHINE) {
     history.splice(0, history.length - MAX_HISTORY_PER_MACHINE);
   }
-  metricsHistory.set(data.machineId, history);
+  s.metricsHistory.set(machineId, history);
 
   if (data.benchmark) {
-    const benchHistory = benchmarkHistory.get(data.machineId) ?? [];
+    const benchHistory = s.benchmarkHistory.get(machineId) ?? [];
     const lastBench = benchHistory[benchHistory.length - 1];
     if (!lastBench || lastBench.timestamp !== data.benchmark.timestamp) {
       benchHistory.push(data.benchmark);
       if (benchHistory.length > MAX_BENCHMARK_HISTORY) {
         benchHistory.splice(0, benchHistory.length - MAX_BENCHMARK_HISTORY);
       }
-      benchmarkHistory.set(data.machineId, benchHistory);
+      s.benchmarkHistory.set(machineId, benchHistory);
     }
   }
 
-  persistToCache();
+  persist();
 }
 
-export function addEvent(entry: ActivityEntry) {
-  events.unshift(entry);
-  if (events.length > MAX_EVENTS) events.length = MAX_EVENTS;
-  persistToCache();
+export async function addEvent(entry: ActivityEntry) {
+  await hydrate();
+  const s = state();
+  s.events.unshift(entry);
+  if (s.events.length > MAX_EVENTS) s.events.length = MAX_EVENTS;
+  persist();
 }
 
-export function getMachines(): MachineMetrics[] {
-  restoreFromCache();
-  return Array.from(machines.values());
+export async function getMachines(): Promise<MachineMetrics[]> {
+  await hydrate();
+  return Array.from(state().machines.values());
 }
 
-export function getEvents(machineId?: string, limit = 50): ActivityEntry[] {
-  restoreFromCache();
-  const filtered = machineId ? events.filter((e) => e.machineId === machineId) : events;
+export async function getEvents(machineId?: string, limit = 50): Promise<ActivityEntry[]> {
+  await hydrate();
+  const filtered = machineId
+    ? state().events.filter((e) => e.machineId === machineId)
+    : state().events;
   return filtered.slice(0, limit);
 }
 
-export function getHistory(machineId: string) {
-  restoreFromCache();
-  return metricsHistory.get(machineId) ?? [];
+export async function getHistory(machineId: string): Promise<HistoryPoint[]> {
+  await hydrate();
+  return state().metricsHistory.get(machineId) ?? [];
 }
 
-export function getBenchmarkHistory(machineId: string) {
-  restoreFromCache();
-  return benchmarkHistory.get(machineId) ?? [];
+export async function getBenchmarkHistory(machineId: string): Promise<BenchmarkResult[]> {
+  await hydrate();
+  return state().benchmarkHistory.get(machineId) ?? [];
 }

@@ -7,5 +7,8 @@ export async function GET(request: Request) {
   const machineId = searchParams.get("machineId") ?? undefined;
   const limit = parseInt(searchParams.get("limit") ?? "50", 10);
 
-  return NextResponse.json({ events: getEvents(machineId, limit) });
+  return NextResponse.json(
+    { events: await getEvents(machineId, limit) },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }

@@ -11,15 +11,13 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    // Upsert machine metrics
     if (body.metrics) {
-      upsertMachine(body.metrics);
+      await upsertMachine(body.metrics);
     }
 
-    // Append activity events
     if (body.events && Array.isArray(body.events)) {
       for (const event of body.events) {
-        addEvent(event);
+        await addEvent(event);
       }
     }
 
