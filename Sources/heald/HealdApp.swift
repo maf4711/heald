@@ -23,6 +23,7 @@ struct HealdApp: AsyncParsableCommand {
             PolicyCommand.self,
             ComplianceCommand.self,
             SudoSetupCommand.self,
+            UpdateCommand.self,
         ],
         defaultSubcommand: RunCommand.self
     )
@@ -100,8 +101,11 @@ struct DoctorCommand: AsyncParsableCommand {
         }
 
         print(String(repeating: "─", count: 48))
+        let autoOff = ProcessInfo.processInfo.environment["HEALD_AUTO_UPDATE"] == "0"
+        print("Update URL: \(AutoUpdateService.updateManifestURL())")
+        print("Auto-update:\(autoOff ? "disabled" : "enabled")\(AutoUpdateService.isManagedInstall() ? " (managed install)" : " (non-install path — daemon skip)")")
         print("Features:   policy · crash-loop · battery · network · updates · webhooks · fleet-ack · compliance")
-        print("CLI:        maintain | heal | autofix | storage | free | policy | compliance | sudo-setup")
+        print("CLI:        maintain | heal | autofix | storage | free | policy | compliance | sudo-setup | update")
         let sh = dataDir.appendingPathComponent("self_heal.json")
         if let data = try? Data(contentsOf: sh),
            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -112,6 +116,59 @@ struct DoctorCommand: AsyncParsableCommand {
             }
         }
         print(String(repeating: "─", count: 48))
+    }
+}
+
+// MARK: - Update
+
+struct UpdateCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "update",
+        abstract: "Check heald.sh for a newer client binary and install it"
+    )
+
+    @Flag(name: .long, help: "Install even if remote version is not newer")
+    var force: Bool = false
+
+    @Flag(name: .long, help: "Only print remote vs local version")
+    var check: Bool = false
+
+    func run() async throws {
+        setvbuf(stdout, nil, _IOLBF, 0)
+        print("heald update v\(HealdApp.version)")
+        print("Manifest: \(AutoUpdateService.updateManifestURL())")
+
+        do {
+            let manifest = try await AutoUpdateService.fetchManifest()
+            print("Local:    \(HealdApp.version)")
+            print("Remote:   \(manifest.version)")
+            print("URL:      \(manifest.url)")
+            if let sha = manifest.sha256, !sha.isEmpty {
+                print("SHA256:   \(sha.prefix(16))…")
+            }
+            if let notes = manifest.notes, !notes.isEmpty {
+                print("Notes:    \(notes)")
+            }
+
+            if check {
+                let newer = AutoUpdateService.isNewer(manifest.version, than: HealdApp.version)
+                print(newer ? "Status:   update available" : "Status:   up to date")
+                throw ExitCode(newer ? 1 : 0)
+            }
+
+            let applied = try await AutoUpdateService.checkAndApply(force: force)
+            if applied {
+                print("Installed \(manifest.version) → \(AutoUpdateService.installBinaryURL().path)")
+                print("Restart daemon: launchctl kickstart -k \"gui/$(id -u)/com.heald.daemon\"")
+            } else {
+                print("Already up to date.")
+            }
+        } catch let code as ExitCode {
+            throw code
+        } catch {
+            print("Error: \(error.localizedDescription)")
+            throw ExitCode(1)
+        }
     }
 }
 
