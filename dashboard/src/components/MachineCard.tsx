@@ -2,7 +2,7 @@
 
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
-/* ── meradOS tokens ── */
+/* ── heald tokens ── */
 const t = {
   bg: "#050508",
   surface: "#0a0a0f",

@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Daemon Foundation** - LaunchAgent skeleton, install/uninstall, TCC verification, graceful shutdown (completed 2026-03-03)
 - [x] **Phase 2: Metric Collector** - CPU, RAM, disk, and process data at correct polling intervals (completed 2026-03-03)
 - [ ] **Phase 3: Storage Layer** - SQLite ring buffer and NDJSON audit log with retention management
-- [ ] **Phase 4: Cloud Dashboard and API** - Next.js on Vercel at heald.meradOS.com, cloud API with auth, multi-machine view, local metric buffer
+- [ ] **Phase 4: Cloud Dashboard and API** - Next.js on Vercel at heald.sh, cloud API with auth, multi-machine view, local metric buffer
 - [ ] **Phase 5: Self-Healing Core** - Process safelist, sustained-threshold kill logic, SIGTERM/SIGKILL sequence
 - [ ] **Phase 6: Extended Health Checks** - Crash detection, DNS flush, orphaned LaunchAgent and plist scanning, Homebrew/update reporting
 - [ ] **Phase 7: AI, Notifications, and Polish** - Ollama integration, AI-driven decisions with dashboard marking, daily email report, macOS notifications
@@ -69,11 +69,11 @@ Plans:
 **Plans**: TBD
 
 ### Phase 4: Cloud Dashboard and API
-**Goal**: A Next.js web app at heald.meradOS.com (hosted on Vercel) shows live metrics, activity feeds, and health status for all connected Macs; a cloud API ingests metrics pushed by each local daemon with authentication; local daemons buffer and retry on connectivity loss.
+**Goal**: A Next.js web app at heald.sh (hosted on Vercel) shows live metrics, activity feeds, and health status for all connected Macs; a cloud API ingests metrics pushed by each local daemon with authentication; local daemons buffer and retry on connectivity loss.
 **Depends on**: Phase 3
 **Requirements**: CLOUD-01, CLOUD-02, CLOUD-03, CLOUD-04, CLOUD-05, CLOUD-06, DASH-02, DASH-03, DASH-04, DASH-05
 **Success Criteria** (what must be TRUE):
-  1. Opening heald.meradOS.com in a browser shows live CPU, RAM, disk, and process data for the local Mac, updating without page refresh.
+  1. Opening heald.sh in a browser shows live CPU, RAM, disk, and process data for the local Mac, updating without page refresh.
   2. A second Mac running the heald daemon appears in the dashboard within one push interval alongside the first — both machines visible simultaneously.
   3. A daemon without a valid API key receives a 401 response and its metrics are rejected; a daemon with a valid key pushes successfully.
   4. When the cloud API is unreachable, the daemon logs metrics to a local buffer; when connectivity resumes, buffered metrics are pushed in order without data loss.

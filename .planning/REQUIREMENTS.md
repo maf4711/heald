@@ -44,7 +44,7 @@
 
 ### Cloud Dashboard and API
 
-- [ ] **CLOUD-01**: Next.js Web-App auf Vercel deployed, erreichbar unter heald.meradOS.com
+- [ ] **CLOUD-01**: Next.js Web-App auf Vercel deployed, erreichbar unter heald.sh
 - [ ] **CLOUD-02**: Cloud-API (Vercel API Routes) nimmt Metriken von Daemons per HTTP POST entgegen
 - [ ] **CLOUD-03**: Daemon authentifiziert sich per API-Key gegen Cloud-API (kein unauth. Push moeglich)
 - [ ] **CLOUD-04**: Daemon puffert Metriken lokal wenn Cloud nicht erreichbar und sendet nach Wiederverbindung nach

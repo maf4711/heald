@@ -1,6 +1,6 @@
 name: Heald
 options:
-  bundleIdPrefix: com.merados.heald
+  bundleIdPrefix: com.heald
   deploymentTarget:
     iOS: "17.0"
   xcodeVersion: "16.0"
@@ -23,7 +23,7 @@ targets:
       - HealdApp
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.merados.heald.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.heald.app
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"

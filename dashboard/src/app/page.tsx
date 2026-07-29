@@ -6,7 +6,7 @@ import { ActivityFeed } from "@/components/ActivityFeed";
 import { FleetBar } from "@/components/FleetBar";
 import { InstallPanel } from "@/components/InstallPanel";
 
-/* ── meradOS tokens ── */
+/* ── heald tokens ── */
 const t = {
   bg: "#050508",
   surface: "#0a0a0f",
@@ -196,7 +196,7 @@ export default function Dashboard() {
         <span style={{ margin: "0 12px", color: t.border }}>|</span>
         <span>heald v1.3.0</span>
         <span style={{ margin: "0 12px", color: t.border }}>|</span>
-        <span style={{ color: t.text3 }}>meradOS</span>
+        <span style={{ color: t.text3 }}>heald</span>
       </footer>
     </div>
   );

@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Ein selbstheilender macOS-Systemwaechter, der als Daemon permanent im Hintergrund laeuft. Er ueberwacht Systemressourcen, Prozessstabilitaet und Systemgesundheit, greift bei Problemen automatisch ein (mit Ollama AI-Unterstuetzung) und protokolliert alles. Ein zentrales Web-Dashboard auf heald.meradOS.com (gehostet via Vercel) zeigt alle verbundenen Macs mit Live-Status, Activity-Feed und historischen Daten. AI-Fixes werden klar markiert.
+Ein selbstheilender macOS-Systemwaechter, der als Daemon permanent im Hintergrund laeuft. Er ueberwacht Systemressourcen, Prozessstabilitaet und Systemgesundheit, greift bei Problemen automatisch ein (mit Ollama AI-Unterstuetzung) und protokolliert alles. Ein zentrales Web-Dashboard auf heald.sh (gehostet via Vercel) zeigt alle verbundenen Macs mit Live-Status, Activity-Feed und historischen Daten. AI-Fixes werden klar markiert.
 
 ## Core Value
 
@@ -25,7 +25,7 @@ macOS laeuft stabil und performant ohne manuelles Eingreifen — Probleme werden
 - [ ] Homebrew-Pakete und macOS-Updates ueberwachen
 - [ ] Detailliertes Logging aller erkannten Probleme und durchgefuehrten Fixes
 - [ ] Ollama AI-Integration fuer intelligente Entscheidungen und Zusammenfassungen
-- [ ] Zentrales Web-Dashboard auf heald.meradOS.com via Vercel
+- [ ] Zentrales Web-Dashboard auf heald.sh via Vercel
 - [ ] Alle Macs im Dashboard sichtbar mit Live-Status
 - [ ] AI-Fixes klar markiert im Dashboard
 - [ ] Taeglicher E-Mail-Report um 18:00 an foellmer@mac.com
@@ -46,7 +46,7 @@ macOS laeuft stabil und performant ohne manuelles Eingreifen — Probleme werden
 - Muss mit macOS-Sicherheitsmodell arbeiten (SIP, TCC, Gatekeeper)
 - Homebrew ist als Paketmanager vorhanden
 - User will keine Interaktion — alles soll automatisch passieren
-- Dashboard gehostet auf Vercel unter heald.meradOS.com
+- Dashboard gehostet auf Vercel unter heald.sh
 - Mehrere Macs sollen ueberwacht und zentral angezeigt werden
 - Alles was fehlt wird automatisch via Homebrew installiert (inkl. Ollama)
 - E-Mail-Report via lokales macOS Mail-System (sendmail)
@@ -57,7 +57,7 @@ macOS laeuft stabil und performant ohne manuelles Eingreifen — Probleme werden
 - **Berechtigungen**: Muss innerhalb der macOS-Sicherheitsgrenzen arbeiten (SIP bleibt aktiv)
 - **Ressourcen**: Der Daemon selbst darf minimal CPU/RAM verbrauchen
 - **Stabilitaet**: Darf das System nicht destabilisieren durch aggressive Eingriffe
-- **Hosting**: Dashboard auf Vercel, Domain heald.meradOS.com
+- **Hosting**: Dashboard auf Vercel, Domain heald.sh
 - **Datenschutz**: Metriken werden an Cloud-Dashboard gesendet — nur ueber authentifizierte API
 
 ## Key Decisions
@@ -66,7 +66,7 @@ macOS laeuft stabil und performant ohne manuelles Eingreifen — Probleme werden
 |----------|-----------|---------|
 | CLI + Web statt native App | Schneller zu bauen, weniger Overhead, User will Terminal | — Pending |
 | Automatisch fixen ohne Nachfrage | User will keine Interaktion, nur Ergebnisse sehen | — Pending |
-| Vercel-gehostetes Dashboard statt localhost | Zentrales Dashboard fuer mehrere Macs, erreichbar unter heald.meradOS.com | — Pending |
+| Vercel-gehostetes Dashboard statt localhost | Zentrales Dashboard fuer mehrere Macs, erreichbar unter heald.sh | — Pending |
 | Ollama AI fuer Entscheidungen | Intelligentere Kill-Entscheidungen statt nur fester Thresholds | — Pending |
 | Swift Daemon + Next.js Dashboard | Swift fuer nativen macOS-Zugriff, Next.js/Vercel fuer Web-Dashboard | — Pending |
 | Projektname: heald | Kurz, praegnant, steht fuer "healing daemon" | — Pending |

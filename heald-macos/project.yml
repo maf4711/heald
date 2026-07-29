@@ -1,6 +1,6 @@
 name: HealdMac
 options:
-  bundleIdPrefix: com.merados.heald
+  bundleIdPrefix: com.heald
   deploymentTarget:
     macOS: "14.0"
   xcodeVersion: "16.0"
@@ -8,6 +8,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.9"
+    DEVELOPMENT_TEAM: K63X3ZTV3Q
 targets:
   HealdMac:
     type: application
@@ -16,12 +17,15 @@ targets:
       - HealdMac
     settings:
       base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.heald.mac
         INFOPLIST_KEY_LSUIElement: true
         ASSETCATALOG_COMPILER_APPICON_NAME: "AppIcon"
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: "AccentColor"
         INFOPLIST_KEY_CFBundleDisplayName: "Heald"
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.utilities"
         CODE_SIGN_ENTITLEMENTS: "HealdMac/HealdMac.entitlements"
+        DEVELOPMENT_TEAM: K63X3ZTV3Q
+        CODE_SIGN_STYLE: Automatic
     info:
       path: HealdMac/Info.plist
       properties:
