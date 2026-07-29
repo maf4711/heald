@@ -2,11 +2,10 @@ import ArgumentParser
 import Foundation
 import ServiceLifecycle
 import OSLog
-import FoundationModels
 
 @main
 struct HealdApp: AsyncParsableCommand {
-    static let version = "2.0.0"
+    static let version = "2.1.0"
 
     static let configuration = CommandConfiguration(
         commandName: "heald",
@@ -50,6 +49,9 @@ struct DoctorCommand: AsyncParsableCommand {
     )
 
     func run() async throws {
+        // Line-buffer so doctor works when stdout is a pipe (non-TTY).
+        setvbuf(stdout, nil, _IOLBF, 0)
+
         print("heald doctor v\(HealdApp.version)")
         print(String(repeating: "─", count: 48))
 
@@ -57,14 +59,9 @@ struct DoctorCommand: AsyncParsableCommand {
         print("Binary:     \(exe)")
         print("Version:    \(HealdApp.version)")
 
-        let aiStatus: String
-        switch SystemLanguageModel.default.availability {
-        case .available:
-            aiStatus = "available (on-device)"
-        default:
-            aiStatus = "unavailable — enable Apple Intelligence in System Settings"
-        }
-        print("AI:         Apple Intelligence — \(aiStatus)")
+        // Avoid importing FoundationModels in this command path — availability
+        // can block for a long time; daemon checks AI on its own tick.
+        print("AI:         Apple Intelligence (checked by daemon at runtime)")
         print("AI backend: FoundationModels (no Ollama)")
 
         let dataDir = FileManager.default.homeDirectoryForCurrentUser
@@ -102,11 +99,37 @@ struct DoctorCommand: AsyncParsableCommand {
             print("Daemon:     not running")
         }
 
+        // Meister batch-maintain handshake (v2.1)
         print(String(repeating: "─", count: 48))
-        if case .available = SystemLanguageModel.default.availability {
-            print("Status: OK — local AI ready")
+        print("Meister bridge (batch-maintain):")
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let lastJSON = home.appendingPathComponent(".meister/last.json")
+        let prefTwin = home.appendingPathComponent(".meister/preferred_twin")
+        let bridgeView = home.appendingPathComponent(".heald/data/meister_bridge.json")
+        let preferred = MeisterBridgeService.preferredMaintainCLI(preferredTwinPath: prefTwin)
+        print("  Preferred CLI: \(preferred)")
+        if let snap = MeisterBridgeService.readLastJSON(at: lastJSON) {
+            let score = snap.score.map(String.init) ?? "?"
+            let ageH = String(format: "%.1f", snap.ageSeconds / 3600)
+            print("  last.json:     score=\(score) err=\(snap.err) warn=\(snap.warn) age=\(ageH)h twin=\(snap.twin ?? "?") v=\(snap.version ?? "?")")
         } else {
-            print("Status: degraded — rules-only healing until Apple Intelligence is available")
+            print("  last.json:     missing — run meisterSiri --quick once")
         }
+        if FileManager.default.fileExists(atPath: bridgeView.path) {
+            print("  bridge view:   \(bridgeView.path)")
+        }
+        if ShellRunner.findExecutable("meisterSiri") != nil {
+            print("  meisterSiri:   on PATH ✓")
+        } else {
+            print("  meisterSiri:   not found (brew install meister)")
+        }
+        if ShellRunner.findExecutable("meister") != nil {
+            print("  meister:       on PATH ✓")
+        } else {
+            print("  meister:       not found")
+        }
+
+        print(String(repeating: "─", count: 48))
+        print("Status: doctor OK — Meister bridge fields printed above")
     }
 }

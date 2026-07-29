@@ -50,13 +50,17 @@ struct HealdService: Service {
         let loginItemsCollector = LoginItemsCollector(store: store)
         let debugWriter       = DebugStatusWriter(store: store)
 
+        // --- Meister batch-maintain bridge (last.json handshake) ---
+        let meisterBridge = MeisterBridgeService(activityLog: activityLog)
+
         let collectorGroup = ServiceGroup(
             services: [cpuCollector, ramCollector, diskCollector, processCollector,
                        networkCollector, batteryCollector, uptimeCollector, thermalCollector,
                        icloudCollector, gpuCollector, bluetoothCollector, wifiCollector,
                        memoryLeakDetector, loginItemsCollector,
                        debugWriter, storageService, cloudPusher, healingService,
-                       healthCheckService, notificationService, maintenanceService],
+                       healthCheckService, notificationService, maintenanceService,
+                       meisterBridge],
             logger: .init(label: "com.heald.services")
         )
 
