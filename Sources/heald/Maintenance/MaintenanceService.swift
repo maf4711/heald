@@ -2,18 +2,12 @@ import Foundation
 import ServiceLifecycle
 import OSLog
 
-/// Orchestrates maintenance by **delegating batch work to Meister**
-/// (`meisterSiri` / `meister`) and keeping heald-native continuous tasks
-/// (benchmark, optional native cleaners as fallback).
+/// Scheduled enterprise maintenance — **100% native** (no Meister CLI).
+/// Profiles adapted from meisterSiri quick/deep semantics.
 ///
-/// Schedule (local time):
-/// - 02:00 daily — system benchmark (native)
-/// - 09:15 daily — Meister `--quick` (lean modules + autofix)
-/// - Sunday 10:30 — Meister `--deep` (full suite)
-///
-/// Legacy native brew/cache cleaners still run at 03:00 / Sun 04:00 as a
-/// light fallback when Meister is missing; when Meister is installed they
-/// are skipped to avoid double work.
+/// - 02:00 daily — system benchmark
+/// - 09:15 daily — quick: brew update/upgrade light path, orphan agents, proactive heal
+/// - Sunday 10:30 — deep: caches, trash, derived data, deep clean, full brew
 struct MaintenanceService: Service {
     let store: MetricsStore
     let db: MetricsDatabase
@@ -21,32 +15,28 @@ struct MaintenanceService: Service {
     let ai: AppleIntelligenceClient
 
     func run() async throws {
-        Logger.maintenance.info(
-            "MaintenanceService started (Meister integration: \(MeisterClient.isInstalled ? "on" : "fallback-native"))"
-        )
+        Logger.maintenance.info("MaintenanceService started (enterprise native)")
 
         let homebrewMaintainer = HomebrewMaintainer()
         let systemCleaner = SystemCleaner()
         let clamAVScanner = ClamAVScanner()
         let systemBenchmark = SystemBenchmark()
         let deepClean = DeepClean()
+        let proactive = ProactiveHealer()
+        let autofix = AutofixEngine()
         let selfHealingRunner = SelfHealingRunner(
             ai: ai,
             activityLog: activityLog
         )
 
-        // One-time: Spotlight fix for MAS apps
         await systemCleaner.fixSpotlightForMASApps(activityLog: activityLog)
 
-        // Track which hour slots we already fired today (avoid re-run every hour tick)
-        var lastDailyQuickDay: Int?
+        var lastQuickDay: Int?
         var lastDeepWeek: Int?
         var lastBenchmarkDay: Int?
-        var lastNativeDailyDay: Int?
-        var lastNativeWeeklyWeek: Int?
 
         while true {
-            try await Task.sleep(for: .seconds(300)) // 5 min tick — finer schedule match
+            try await Task.sleep(for: .seconds(300))
 
             let now = Date()
             let cal = Calendar.current
@@ -55,9 +45,8 @@ struct MaintenanceService: Service {
             let minute = parts.minute ?? 0
             let day = parts.day ?? 0
             let week = (parts.year ?? 0) * 100 + (parts.weekOfYear ?? 0)
-            let weekday = parts.weekday ?? 0 // 1 = Sunday
+            let weekday = parts.weekday ?? 0
 
-            // ── Daily benchmark at 02:00 ──
             if hour == 2 && minute < 10 && lastBenchmarkDay != day {
                 lastBenchmarkDay = day
                 Logger.benchmark.info("Starting daily benchmark...")
@@ -68,145 +57,148 @@ struct MaintenanceService: Service {
                 }
             }
 
-            // ── Meister daily --quick ~09:15 (matches meister LaunchAgent) ──
-            if hour == 9 && minute >= 10 && minute < 25 && lastDailyQuickDay != day {
-                lastDailyQuickDay = day
-                await runMeisterProfile(.quick, label: "daily-quick")
+            // Daily quick ~09:15
+            if hour == 9 && minute >= 10 && minute < 25 && lastQuickDay != day {
+                lastQuickDay = day
+                await runQuick(
+                    homebrew: homebrewMaintainer,
+                    proactive: proactive,
+                    autofix: autofix,
+                    selfHealingRunner: selfHealingRunner
+                )
             }
 
-            // ── Meister weekly --deep Sunday ~10:30 ──
+            // Weekly deep Sunday ~10:30
             if weekday == 1 && hour == 10 && minute >= 25 && minute < 40 && lastDeepWeek != week {
                 lastDeepWeek = week
-                await runMeisterProfile(.deep, label: "weekly-deep")
-            }
-
-            // ── Native fallback only when Meister missing ──
-            if !MeisterClient.isInstalled {
-                if hour == 3 && minute < 10 && lastNativeDailyDay != day {
-                    lastNativeDailyDay = day
-                    await runNativeDaily(
-                        homebrewMaintainer: homebrewMaintainer,
-                        systemCleaner: systemCleaner,
-                        selfHealingRunner: selfHealingRunner
-                    )
-                }
-                if weekday == 1 && hour == 4 && minute < 10 && lastNativeWeeklyWeek != week {
-                    lastNativeWeeklyWeek = week
-                    await runNativeWeekly(
-                        homebrewMaintainer: homebrewMaintainer,
-                        systemCleaner: systemCleaner,
-                        clamAVScanner: clamAVScanner,
-                        deepClean: deepClean,
-                        selfHealingRunner: selfHealingRunner
-                    )
-                }
+                await runDeep(
+                    homebrew: homebrewMaintainer,
+                    systemCleaner: systemCleaner,
+                    clamAV: clamAVScanner,
+                    deepClean: deepClean,
+                    proactive: proactive,
+                    autofix: autofix,
+                    selfHealingRunner: selfHealingRunner
+                )
             }
         }
     }
 
-    // MARK: - Meister profiles
+    // MARK: - Profiles (callable from CLI)
 
-    private func runMeisterProfile(_ profile: MeisterClient.Profile, label: String) async {
-        Logger.maintenance.info("Starting Meister \(profile.rawValue) (\(label))...")
-        try? await activityLog.log(event: ActivityEvent(
-            type: .maintenanceStarted,
-            summary: "Meister \(profile.rawValue) started (\(label))"
-        ))
-
-        let result = await Task.detached {
-            MeisterClient.maintain(profile: profile, dryRun: false, quiet: true)
-        }.value
-
-        let summary: String
-        if result.exitCode == 127 {
-            summary = "Meister missing — skipped \(label)"
-            Logger.maintenance.warning("\(summary)")
-        } else {
-            summary = "Meister \(profile.rawValue) exit \(result.exitCode) in \(result.durationMs)ms (\(label))"
-            Logger.maintenance.info("\(summary)")
-        }
-
-        try? await activityLog.log(event: ActivityEvent(
-            type: result.succeeded ? .maintenanceCompleted : .maintenanceStarted,
-            summary: summary,
-            detail: String(result.stderr.suffix(400))
-        ))
-
-        // Refresh bridge view after maintain
-        let snap = MeisterClient.readLastJSON()
-        let pref = MeisterBridgeService.preferredMaintainCLI(
-            preferredTwinPath: FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".meister/preferred_twin")
-        )
-        MeisterBridgeService.writeHealdView(snap: snap, preferred: pref)
-    }
-
-    // MARK: - Native fallback (no Meister)
-
-    private func runNativeDaily(
-        homebrewMaintainer: HomebrewMaintainer,
-        systemCleaner: SystemCleaner,
+    func runQuick(
+        homebrew: HomebrewMaintainer,
+        proactive: ProactiveHealer,
+        autofix: AutofixEngine,
         selfHealingRunner: SelfHealingRunner
     ) async {
-        Logger.maintenance.info("Native daily maintenance (Meister not installed)...")
+        Logger.maintenance.info("Quick maintain starting...")
         try? await activityLog.log(event: ActivityEvent(
             type: .maintenanceStarted,
-            summary: "Native daily maintenance started"
+            summary: "Quick maintain (enterprise)"
         ))
+        await proactive.run(activityLog: activityLog)
+        await autofix.quarantineOrphanAgents(activityLog: activityLog)
         await selfHealingRunner.runSafe(name: "Homebrew") {
-            try await homebrewMaintainer.updateAndUpgrade(activityLog: activityLog)
+            try await homebrew.updateAndUpgrade(activityLog: activityLog)
         }
         await selfHealingRunner.runSafe(name: "MAS") {
-            try await homebrewMaintainer.updateMAS(activityLog: activityLog)
-        }
-        await selfHealingRunner.runSafe(name: "OfficeUpdate") {
-            try await homebrewMaintainer.updateOffice(activityLog: activityLog)
-        }
-        await selfHealingRunner.runSafe(name: "LargeFiles") {
-            try await systemCleaner.findLargeFiles(activityLog: activityLog)
+            try await homebrew.updateMAS(activityLog: activityLog)
         }
         try? await activityLog.log(event: ActivityEvent(
             type: .maintenanceCompleted,
-            summary: "Native daily maintenance completed"
+            summary: "Quick maintain completed"
         ))
+        Logger.maintenance.info("Quick maintain done")
     }
 
-    private func runNativeWeekly(
-        homebrewMaintainer: HomebrewMaintainer,
+    func runDeep(
+        homebrew: HomebrewMaintainer,
         systemCleaner: SystemCleaner,
-        clamAVScanner: ClamAVScanner,
+        clamAV: ClamAVScanner,
         deepClean: DeepClean,
+        proactive: ProactiveHealer,
+        autofix: AutofixEngine,
         selfHealingRunner: SelfHealingRunner
     ) async {
-        Logger.maintenance.info("Native weekly maintenance (Meister not installed)...")
+        Logger.maintenance.info("Deep maintain starting...")
         try? await activityLog.log(event: ActivityEvent(
             type: .maintenanceStarted,
-            summary: "Native weekly maintenance started"
+            summary: "Deep maintain (enterprise)"
         ))
-        await selfHealingRunner.runSafe(name: "AppMigration") {
-            try await homebrewMaintainer.migrateMASApps(activityLog: activityLog)
-        }
-        await selfHealingRunner.runSafe(name: "CacheCleaner") {
+        await runQuick(
+            homebrew: homebrew,
+            proactive: proactive,
+            autofix: autofix,
+            selfHealingRunner: selfHealingRunner
+        )
+        await selfHealingRunner.runSafe(name: "Caches") {
             try await systemCleaner.cleanCaches(activityLog: activityLog)
         }
-        await selfHealingRunner.runSafe(name: "TrashCleanup") {
+        await selfHealingRunner.runSafe(name: "Trash") {
             try await systemCleaner.emptyTrash(activityLog: activityLog)
         }
-        await selfHealingRunner.runSafe(name: "XcodeDerivedData") {
+        await selfHealingRunner.runSafe(name: "DerivedData") {
             try await systemCleaner.cleanXcodeDerivedData(activityLog: activityLog)
-        }
-        await selfHealingRunner.runSafe(name: "ClamAV") {
-            try await clamAVScanner.scan(activityLog: activityLog)
-        }
-        await selfHealingRunner.runSafe(name: "PeriodicMaintenance") {
-            try await systemCleaner.runPeriodicMaintenance(activityLog: activityLog)
         }
         await selfHealingRunner.runSafe(name: "DeepClean") {
             await deepClean.run(activityLog: activityLog)
         }
+        await selfHealingRunner.runSafe(name: "ClamAV") {
+            try await clamAV.scan(activityLog: activityLog)
+        }
+        await selfHealingRunner.runSafe(name: "Periodic") {
+            try await systemCleaner.runPeriodicMaintenance(activityLog: activityLog)
+        }
         try? await activityLog.log(event: ActivityEvent(
             type: .maintenanceCompleted,
-            summary: "Native weekly maintenance completed"
+            summary: "Deep maintain completed"
         ))
+        Logger.maintenance.info("Deep maintain done")
+    }
+}
+
+/// Static entry points for CLI (same profiles as daemon schedule).
+enum MaintainProfiles {
+    static func quick(activityLog: ActivityLog, ai: AppleIntelligenceClient) async {
+        let svc = MaintenanceService(
+            store: MetricsStore(),
+            db: try! MetricsDatabase(path: NSTemporaryDirectory() + "heald-cli.db"),
+            activityLog: activityLog,
+            ai: ai
+        )
+        let runner = SelfHealingRunner(ai: ai, activityLog: activityLog)
+        await svc.runQuick(
+            homebrew: HomebrewMaintainer(),
+            proactive: ProactiveHealer(),
+            autofix: AutofixEngine(),
+            selfHealingRunner: runner
+        )
+    }
+
+    static func deep(activityLog: ActivityLog, ai: AppleIntelligenceClient) async {
+        let path = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".heald/data/cli-maintain.db").path
+        try? FileManager.default.createDirectory(
+            at: URL(fileURLWithPath: path).deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let db = try! MetricsDatabase(path: path)
+        let svc = MaintenanceService(
+            store: MetricsStore(),
+            db: db,
+            activityLog: activityLog,
+            ai: ai
+        )
+        let runner = SelfHealingRunner(ai: ai, activityLog: activityLog)
+        await svc.runDeep(
+            homebrew: HomebrewMaintainer(),
+            systemCleaner: SystemCleaner(),
+            clamAV: ClamAVScanner(),
+            deepClean: DeepClean(),
+            proactive: ProactiveHealer(),
+            autofix: AutofixEngine(),
+            selfHealingRunner: runner
+        )
     }
 }

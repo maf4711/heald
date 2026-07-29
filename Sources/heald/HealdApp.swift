@@ -5,49 +5,44 @@ import OSLog
 
 @main
 struct HealdApp: AsyncParsableCommand {
-    static let version = "2.2.0"
+    static let version = "3.0.0"
 
     static let configuration = CommandConfiguration(
         commandName: "heald",
-        abstract: "Self-healing macOS daemon + Meister batch-maintain integration",
+        abstract: "heald Enterprise — self-healing macOS daemon (no Meister dependency)",
         version: version,
         subcommands: [
             RunCommand.self,
             DoctorCommand.self,
-            MaintainCommand.self,
             StatusCommand.self,
-            MeisterCommand.self,
+            MaintainCommand.self,
             HealCommand.self,
             AutofixCommand.self,
             StorageCommand.self,
-            ScoreCommand.self,
-            TwinsBenchCommand.self,
-            WhyCommand.self,
+            FreeCommand.self,
         ],
         defaultSubcommand: RunCommand.self
     )
 }
 
-// MARK: - Run (daemon)
+// MARK: - Run
 
 struct RunCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "run",
-        abstract: "Start the heald daemon (default)"
+        abstract: "Start the heald enterprise daemon"
     )
 
     func run() async throws {
-        Logger.lifecycle.info("heald \(HealdApp.version) starting (Meister integrated)")
-
+        Logger.lifecycle.info("heald \(HealdApp.version) enterprise starting")
         let store = MetricsStore()
         let service = HealdService(store: store)
-        let serviceGroup = ServiceGroup(
+        let group = ServiceGroup(
             services: [service],
             gracefulShutdownSignals: [.sigterm, .sigint],
             logger: .init(label: "com.heald.daemon")
         )
-
-        try await serviceGroup.run()
+        try await group.run()
         Logger.lifecycle.info("heald stopped cleanly")
     }
 }
@@ -57,31 +52,20 @@ struct RunCommand: AsyncParsableCommand {
 struct DoctorCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "doctor",
-        abstract: "Install health, LaunchAgent, Meister bridge"
+        abstract: "Install + self-heal status"
     )
 
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
-
-        print("heald doctor v\(HealdApp.version)")
+        print("heald doctor v\(HealdApp.version) — Enterprise")
         print(String(repeating: "─", count: 48))
-
-        let exe = CommandLine.arguments.first ?? "heald"
-        print("Binary:     \(exe)")
-        print("Version:    \(HealdApp.version)")
-        print("AI:         Apple Intelligence (daemon runtime)")
-        print("AI backend: FoundationModels (no Ollama)")
+        print("Edition:    enterprise (native self-heal)")
+        print("Meister:    not required / not linked")
+        print("Binary:     \(CommandLine.arguments.first ?? "heald")")
 
         let dataDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".heald/data")
-        let dataOK = FileManager.default.fileExists(atPath: dataDir.path)
-        print("Data dir:   \(dataDir.path) \(dataOK ? "✓" : "(not created yet)")")
-
-        let apiKey = ProcessInfo.processInfo.environment["HEALD_API_KEY"] ?? ""
-        let apiURL = ProcessInfo.processInfo.environment["HEALD_API_URL"]
-            ?? "https://heald.sh/api/ingest"
-        print("API URL:    \(apiURL)")
-        print("API key:    \(apiKey.isEmpty ? "not set (cloud push disabled)" : "set (\(apiKey.count) chars)")")
+        print("Data dir:   \(dataDir.path) \(FileManager.default.fileExists(atPath: dataDir.path) ? "✓" : "—")")
 
         let installBin = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/heald/heald").path
@@ -107,207 +91,152 @@ struct DoctorCommand: AsyncParsableCommand {
             print("Daemon:     not running")
         }
 
-        printMeisterSection()
         print(String(repeating: "─", count: 48))
-        print("Status: doctor OK — use `heald maintain` for Meister batch jobs")
+        print("Self-heal:")
+        let sh = dataDir.appendingPathComponent("self_heal.json")
+        if let data = try? Data(contentsOf: sh),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            print("  status:     \(sh.path)")
+            if let p = obj["ram_pressure"] { print("  ram_pressure: \(p)") }
+            if let d = obj["disk_free_pct"] as? Double, d >= 0 {
+                print(String(format: "  disk_free:   %.1f%%", d))
+            }
+            if let last = obj["last_actions"] as? [String: Any], !last.isEmpty {
+                print("  last_actions: \(last.keys.sorted().joined(separator: ", "))")
+            }
+        } else {
+            print("  status:     (waiting for first orchestrator tick)")
+        }
+        print("  loop:       detect → remediate → log → notify (every ~45s)")
+        print("  schedule:   09:15 quick · Sun 10:30 deep · 02:00 benchmark")
+        print(String(repeating: "─", count: 48))
+        print("CLI: heald maintain | heal | autofix | storage | free | status")
     }
 }
 
-// MARK: - Status (Meister handshake)
+// MARK: - Status
 
 struct StatusCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "status",
-        abstract: "Meister last.json + preferred twin + bridge view"
+        abstract: "Self-heal status JSON + summary"
     )
 
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
-        print("heald status v\(HealdApp.version)")
-        printMeisterSection()
+        let sh = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".heald/data/self_heal.json")
+        if let s = try? String(contentsOf: sh, encoding: .utf8) {
+            print(s)
+        } else {
+            print("{\"schema\":\"heald.self_heal/v1\",\"note\":\"no status yet — start daemon\"}")
+        }
     }
 }
 
-// MARK: - Maintain (Meister profiles)
+// MARK: - Maintain
 
 struct MaintainCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "maintain",
-        abstract: "Run Meister batch-maintain (quick|auto|deep|all)"
+        abstract: "Run native quick|deep maintenance now"
     )
 
-    @Option(name: .shortAndLong, help: "Profile: quick|auto|deep|all (default: quick)")
+    @Option(name: .shortAndLong, help: "quick|deep")
     var profile: String = "quick"
 
-    @Flag(name: .customLong("dry-run"), help: "Dry-run (-n)")
-    var dryRun: Bool = false
-
-    @Flag(name: .shortAndLong, help: "Quiet (-q)")
-    var quiet: Bool = false
-
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
-        guard MeisterClient.isInstalled else {
-            print("ERROR: meister/meisterSiri not on PATH — brew install meister")
-            throw ExitCode(127)
-        }
-        let p: MeisterClient.Profile
+        let logPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".heald/data/activity.ndjson").path
+        try? FileManager.default.createDirectory(
+            atPath: (logPath as NSString).deletingLastPathComponent,
+            withIntermediateDirectories: true
+        )
+        let activityLog = try ActivityLog(path: logPath)
+        let ai = AppleIntelligenceClient()
+        await ai.checkAvailability()
+
+        print("heald maintain —\(profile) (native enterprise)...")
         switch profile.lowercased() {
-        case "quick": p = .quick
-        case "auto": p = .auto
-        case "deep": p = .deep
-        case "all", "a": p = .all
+        case "quick":
+            await MaintainProfiles.quick(activityLog: activityLog, ai: ai)
+        case "deep":
+            await MaintainProfiles.deep(activityLog: activityLog, ai: ai)
         default:
-            print("Unknown profile '\(profile)' — use quick|auto|deep|all")
+            print("Unknown profile — use quick|deep")
             throw ExitCode(2)
         }
-        print("heald maintain → Meister --\(p.rawValue)\(dryRun ? " -n" : "")...")
-        let result = MeisterClient.maintain(profile: p, dryRun: dryRun, quiet: quiet)
-        if !result.stdout.isEmpty { print(result.stdout) }
-        if !result.stderr.isEmpty { fputs(result.stderr, stderr) }
-        print("exit \(result.exitCode) in \(result.durationMs)ms via \(result.executable)")
-        throw ExitCode(result.exitCode == 0 ? 0 : (result.exitCode == 1 ? 1 : 1))
+        print("done")
     }
 }
 
-// MARK: - Meister passthrough + tools
-
-struct MeisterCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "meister",
-        abstract: "Pass arguments through to preferred Meister twin",
-        discussion: "Example: heald meister doctor --json · heald meister storage"
-    )
-
-    @Argument(parsing: .captureForPassthrough, help: "Args forwarded to meisterSiri/meister")
-    var args: [String] = []
-
-    func run() async throws {
-        setvbuf(stdout, nil, _IOLBF, 0)
-        guard MeisterClient.isInstalled else {
-            print("ERROR: meister/meisterSiri not on PATH")
-            throw ExitCode(127)
-        }
-        if args.isEmpty {
-            print("Usage: heald meister <meister-args...>")
-            print("  heald meister doctor --json")
-            print("  heald meister --quick -n")
-            print("  heald meister storage")
-            throw ExitCode(2)
-        }
-        let result = MeisterClient.passthrough(args)
-        if !result.stdout.isEmpty { print(result.stdout, terminator: "") }
-        if !result.stderr.isEmpty { fputs(result.stderr, stderr) }
-        throw ExitCode(result.exitCode == 0 ? 0 : 1)
-    }
-}
-
-// Thin wrappers for common Meister tools
+// MARK: - Heal / Autofix / Storage / Free
 
 struct HealCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "heal",
-        abstract: "Meister proactive healer (broken symlinks, orphans, …)"
+        abstract: "Run proactive healer now (symlinks, orphans, .DS_Store)"
     )
-    @Flag(name: .customLong("dry-run"), help: "Dry-run")
-    var dryRun: Bool = false
     func run() async throws {
-        try runTool(.heal, extra: dryRun ? ["--dry-run"] : [])
+        setvbuf(stdout, nil, _IOLBF, 0)
+        let log = try openActivityLog()
+        print("heald heal (proactive)...")
+        await ProactiveHealer().run(activityLog: log)
+        print("done")
     }
 }
 
 struct AutofixCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "autofix",
-        abstract: "Meister deterministic autofix catalog"
+        abstract: "Deterministic autofix (orphans, firewall, brew cleanup light)"
     )
-    func run() async throws { try runTool(.autofix) }
+    func run() async throws {
+        setvbuf(stdout, nil, _IOLBF, 0)
+        let log = try openActivityLog()
+        let engine = AutofixEngine()
+        print("heald autofix...")
+        await engine.quarantineOrphanAgents(activityLog: log)
+        await engine.enableFirewall(activityLog: log)
+        await engine.brewCleanupLight(activityLog: log)
+        print("done")
+    }
 }
 
 struct StorageCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "storage",
-        abstract: "Meister storage candidates (DerivedData, caches, …)"
+        abstract: "Safe-to-delete size report (read-only)"
     )
-    func run() async throws { try runTool(.storage) }
-}
-
-struct ScoreCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "score",
-        abstract: "Meister maintenance score history"
-    )
-    func run() async throws { try runTool(.score) }
-}
-
-struct TwinsBenchCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "twins-bench",
-        abstract: "Benchmark meister (Ollama) vs meisterSiri (Apple Intelligence)"
-    )
-    @Flag(name: .customLong("quick"), help: "Skip full dry-run")
-    var quick: Bool = false
-    @Flag(name: .customLong("json"), help: "JSON only")
-    var json: Bool = false
     func run() async throws {
-        var extra: [String] = []
-        if quick { extra.append("--quick") }
-        if json { extra.append("--json") }
-        try runTool(.twinsBench, extra: extra)
+        setvbuf(stdout, nil, _IOLBF, 0)
+        StorageReport.printReport()
     }
 }
 
-struct WhyCommand: AsyncParsableCommand {
+struct FreeCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "why",
-        abstract: "Meister why <module|profile|warn>"
+        commandName: "free",
+        abstract: "Attempt RAM purge (sudo -n purge if available)"
     )
-    @Argument(help: "What to explain (default: profile)")
-    var query: String?
     func run() async throws {
-        try runTool(.why, extra: [query ?? "profile"])
+        setvbuf(stdout, nil, _IOLBF, 0)
+        let log = try openActivityLog()
+        print("heald free...")
+        await RAMPurge().purge(activityLog: log)
+        print("done")
     }
 }
 
-// MARK: - Shared helpers
+// MARK: - Helpers
 
-private func runTool(_ tool: MeisterClient.Tool, extra: [String] = []) throws {
-    setvbuf(stdout, nil, _IOLBF, 0)
-    guard MeisterClient.isInstalled else {
-        print("ERROR: meister/meisterSiri not on PATH — brew install meister")
-        throw ExitCode(127)
-    }
-    let result = MeisterClient.tool(tool, extraArgs: extra)
-    if !result.stdout.isEmpty { print(result.stdout, terminator: result.stdout.hasSuffix("\n") ? "" : "\n") }
-    if !result.stderr.isEmpty { fputs(result.stderr, stderr) }
-    throw ExitCode(result.exitCode == 0 ? 0 : 1)
-}
-
-private func printMeisterSection() {
-    print(String(repeating: "─", count: 48))
-    print("Meister integration (batch-maintain):")
-    if let exe = MeisterClient.preferredExecutable() {
-        print("  CLI:          \(exe)")
-    } else {
-        print("  CLI:          NOT FOUND — brew install meister")
-    }
-    let prefURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".meister/preferred_twin")
-    let preferred = MeisterBridgeService.preferredMaintainCLI(preferredTwinPath: prefURL)
-    print("  Preferred:    \(preferred)")
-    if let snap = MeisterClient.readLastJSON() {
-        let score = snap.score.map(String.init) ?? "?"
-        let ageH = String(format: "%.1f", snap.ageSeconds / 3600)
-        print("  last.json:    score=\(score) err=\(snap.err) warn=\(snap.warn) age=\(ageH)h twin=\(snap.twin ?? "?") v=\(snap.version ?? "?")")
-    } else {
-        print("  last.json:    missing — run: heald maintain --profile quick")
-    }
-    let bridgeView = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".heald/data/meister_bridge.json")
-    if FileManager.default.fileExists(atPath: bridgeView.path) {
-        print("  bridge view:  \(bridgeView.path)")
-    }
-    print("  Commands:     heald maintain | heal | autofix | storage | score | twins-bench")
-    print("  Passthrough:  heald meister <args…>")
-    print("  Schedule:     daily 09:15 --quick · Sun 10:30 --deep (daemon)")
+private func openActivityLog() throws -> ActivityLog {
+    let path = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".heald/data/activity.ndjson").path
+    try FileManager.default.createDirectory(
+        atPath: (path as NSString).deletingLastPathComponent,
+        withIntermediateDirectories: true
+    )
+    return try ActivityLog(path: path)
 }

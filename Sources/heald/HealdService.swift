@@ -6,9 +6,8 @@ struct HealdService: Service {
     let store: MetricsStore
 
     func run() async throws {
-        Logger.lifecycle.info("HealdService running — starting metric collectors and storage")
+        Logger.lifecycle.info("HealdService running — enterprise self-heal (no Meister dependency)")
 
-        // --- Storage Layer (Phase 3) ---
         let dataDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".heald/data")
         let dbPath = dataDir.appendingPathComponent("metrics.db").path
@@ -17,50 +16,43 @@ struct HealdService: Service {
         let db = try MetricsDatabase(path: dbPath)
         let activityLog = try ActivityLog(path: logPath)
         let storageService = StorageService(store: store, db: db, activityLog: activityLog)
-        let cloudPusher    = CloudPusher(store: store, activityLog: activityLog)
+        let cloudPusher = CloudPusher(store: store, activityLog: activityLog)
 
-        // --- Apple Intelligence (on-device only; meisterSiri-style) ---
         let ai = AppleIntelligenceClient()
         await ai.checkAvailability()
 
-        // --- Healing (Phase 5) ---
         let healingService = HealingService(store: store, activityLog: activityLog, ai: ai)
-
-        // --- Health Checks (Phase 6) ---
         let healthCheckService = HealthCheckService(store: store, activityLog: activityLog)
-
-        // --- Notifications + Maintenance (Phase 7) ---
         let notificationService = NotificationService(store: store, activityLog: activityLog, ai: ai)
         let maintenanceService = MaintenanceService(store: store, db: db, activityLog: activityLog, ai: ai)
+        let selfHeal = SelfHealOrchestrator(store: store, activityLog: activityLog)
 
-        // --- Collectors ---
-        let cpuCollector      = CPUCollector(store: store)
-        let ramCollector      = RAMCollector(store: store)
-        let diskCollector     = DiskCollector(store: store)
-        let processCollector  = ProcessCollector(store: store)
-        let networkCollector  = NetworkCollector(store: store)
-        let batteryCollector  = BatteryCollector(store: store)
-        let uptimeCollector   = UptimeCollector(store: store)
-        let thermalCollector  = ThermalCollector(store: store, activityLog: activityLog)
-        let icloudCollector   = ICloudCollector(store: store, activityLog: activityLog)
-        let gpuCollector      = GPUCollector(store: store)
+        let cpuCollector = CPUCollector(store: store)
+        let ramCollector = RAMCollector(store: store)
+        let diskCollector = DiskCollector(store: store)
+        let processCollector = ProcessCollector(store: store)
+        let networkCollector = NetworkCollector(store: store)
+        let batteryCollector = BatteryCollector(store: store)
+        let uptimeCollector = UptimeCollector(store: store)
+        let thermalCollector = ThermalCollector(store: store, activityLog: activityLog)
+        let icloudCollector = ICloudCollector(store: store, activityLog: activityLog)
+        let gpuCollector = GPUCollector(store: store)
         let bluetoothCollector = BluetoothCollector(store: store, activityLog: activityLog)
-        let wifiCollector     = WiFiCollector(store: store)
+        let wifiCollector = WiFiCollector(store: store)
         let memoryLeakDetector = MemoryLeakDetector(store: store, activityLog: activityLog)
         let loginItemsCollector = LoginItemsCollector(store: store)
-        let debugWriter       = DebugStatusWriter(store: store)
-
-        // --- Meister batch-maintain bridge (last.json handshake) ---
-        let meisterBridge = MeisterBridgeService(activityLog: activityLog)
+        let debugWriter = DebugStatusWriter(store: store)
 
         let collectorGroup = ServiceGroup(
-            services: [cpuCollector, ramCollector, diskCollector, processCollector,
-                       networkCollector, batteryCollector, uptimeCollector, thermalCollector,
-                       icloudCollector, gpuCollector, bluetoothCollector, wifiCollector,
-                       memoryLeakDetector, loginItemsCollector,
-                       debugWriter, storageService, cloudPusher, healingService,
-                       healthCheckService, notificationService, maintenanceService,
-                       meisterBridge],
+            services: [
+                cpuCollector, ramCollector, diskCollector, processCollector,
+                networkCollector, batteryCollector, uptimeCollector, thermalCollector,
+                icloudCollector, gpuCollector, bluetoothCollector, wifiCollector,
+                memoryLeakDetector, loginItemsCollector,
+                debugWriter, storageService, cloudPusher,
+                healingService, healthCheckService, notificationService,
+                maintenanceService, selfHeal,
+            ],
             logger: .init(label: "com.heald.services")
         )
 
