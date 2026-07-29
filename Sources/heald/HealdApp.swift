@@ -5,7 +5,7 @@ import OSLog
 
 @main
 struct HealdApp: AsyncParsableCommand {
-    static let version = "3.1.0"
+    static let version = "3.1.1"
 
     static let configuration = CommandConfiguration(
         commandName: "heald",

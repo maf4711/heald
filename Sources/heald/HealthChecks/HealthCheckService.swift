@@ -16,6 +16,7 @@ struct HealthCheckService: Service {
 
     func run() async throws {
         let crashDetector = CrashDetector()
+        let systemErrorScanner = SystemErrorScanner()
         let dnsChecker = DNSChecker()
         let launchAgentScanner = LaunchAgentScanner()
         let updateChecker = UpdateChecker()
@@ -41,7 +42,7 @@ struct HealthCheckService: Service {
             try await Task.sleep(for: .seconds(30))
             cycle += 1
 
-            // Crash detection — every 30s
+            // Crash detection (running processes) — every 30s
             let restarted = await crashDetector.check(activityLog: activityLog)
             if !restarted.isEmpty {
                 Logger.health.info("Restarted: \(restarted.joined(separator: ", "))")
@@ -49,6 +50,11 @@ struct HealthCheckService: Service {
 
             // Disk I/O anomaly detection — every 30s
             await diskIOAnomalyDetector.check(store: store, activityLog: activityLog)
+
+            // DiagnosticReports + unified-log faults — every 60s
+            if cycle % 2 == 0 {
+                await systemErrorScanner.scan(activityLog: activityLog)
+            }
 
             // DNS + Focus check — every 60s (cycle % 2 == 0)
             if cycle % 2 == 0 {

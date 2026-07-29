@@ -12,7 +12,8 @@ enum ShellRunner {
     static func run(
         _ executable: String,
         arguments: [String] = [],
-        environment: [String: String]? = nil
+        environment: [String: String]? = nil,
+        timeoutSeconds: TimeInterval? = nil
     ) -> Result {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: executable)
@@ -30,7 +31,25 @@ enum ShellRunner {
             return Result(output: "", errorOutput: error.localizedDescription, exitCode: -1)
         }
 
-        task.waitUntilExit()
+        if let timeout = timeoutSeconds, timeout > 0 {
+            let deadline = Date().addingTimeInterval(timeout)
+            while task.isRunning && Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.05)
+            }
+            if task.isRunning {
+                task.terminate()
+                // brief wait then force-kill if needed
+                Thread.sleep(forTimeInterval: 0.2)
+                if task.isRunning { task.interrupt() }
+                return Result(
+                    output: String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "",
+                    errorOutput: "timeout after \(Int(timeout))s",
+                    exitCode: 124
+                )
+            }
+        } else {
+            task.waitUntilExit()
+        }
 
         let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
         let errData = errPipe.fileHandleForReading.readDataToEndOfFile()

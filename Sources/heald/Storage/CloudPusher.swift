@@ -2,14 +2,14 @@ import Foundation
 import ServiceLifecycle
 import OSLog
 
-/// Pushes metrics to the cloud dashboard API (CLOUD-02, CLOUD-04).
-/// Buffers locally when the API is unreachable and retries on reconnection.
+/// Pushes metrics + activity events to the cloud dashboard API (CLOUD-02, CLOUD-04).
+/// Activity is read from `ActivityLog` via a durable byte-offset cursor (no re-send).
 struct CloudPusher: Service {
     let store: MetricsStore
     let activityLog: ActivityLog
 
     private static let pushInterval: Duration = .seconds(10)
-    private static let maxBufferSize = 100
+    private static let eventsPerPush = 50
 
     // Configuration from environment or defaults
     private var apiURL: String { ProcessInfo.processInfo.environment["HEALD_API_URL"] ?? "https://heald.sh/api/ingest" }
@@ -23,30 +23,43 @@ struct CloudPusher: Service {
             while true { try await Task.sleep(for: .seconds(3600)) }
         }
 
-        var eventBuffer: [[String: Any]] = []
+        var activityCursor = loadCursor()
+        // On first start with empty cursor file: skip historical backlog (start at EOF)
+        if !cursorFileExists() {
+            if let eof = try? await activityLog.endOffset() {
+                activityCursor = eof
+                saveCursor(activityCursor)
+                Logger.storage.info("CloudPusher: activity cursor init at EOF \(eof)")
+            }
+        }
 
         while true {
             try await Task.sleep(for: Self.pushInterval)
 
-            let payload = await buildPayload()
+            var nextCursor = activityCursor
+            let payload = await buildPayload(cursor: activityCursor, nextCursor: &nextCursor)
 
             do {
-                try await pushToCloud(payload: payload, buffer: &eventBuffer)
-                Logger.storage.debug("CloudPusher: push OK")
-            } catch {
-                // CLOUD-04: buffer on failure
-                if let events = payload["events"] as? [[String: Any]] {
-                    eventBuffer.append(contentsOf: events)
-                    if eventBuffer.count > Self.maxBufferSize {
-                        eventBuffer.removeFirst(eventBuffer.count - Self.maxBufferSize)
-                    }
+                try await pushToCloud(payload: payload)
+                // Advance durable cursor only after successful HTTP 200
+                if nextCursor != activityCursor {
+                    activityCursor = nextCursor
+                    saveCursor(activityCursor)
                 }
-                Logger.storage.warning("CloudPusher: push failed, buffered (\(eventBuffer.count) events) — \(error)")
+                let n = (payload["events"] as? [[String: Any]])?.count ?? 0
+                if n > 0 {
+                    Logger.storage.info("CloudPusher: push OK (\(n) events, cursor=\(activityCursor))")
+                } else {
+                    Logger.storage.debug("CloudPusher: push OK")
+                }
+            } catch {
+                // Cursor unchanged → same NDJSON range re-sent next tick
+                Logger.storage.warning("CloudPusher: push failed (cursor=\(activityCursor)) — \(error)")
             }
         }
     }
 
-    private func buildPayload() async -> [String: Any] {
+    private func buildPayload(cursor: UInt64, nextCursor: inout UInt64) async -> [String: Any] {
         let cpu = await store.cpu
         let ram = await store.ram
         let disk = await store.disk
@@ -268,20 +281,36 @@ struct CloudPusher: Service {
             ] as [String: Any]
         }
 
-        return ["metrics": metrics, "events": [] as [[String: Any]]]
-    }
-
-    private func pushToCloud(payload: [String: Any], buffer: inout [[String: Any]]) async throws {
-        var fullPayload = payload
-
-        // Flush buffer if we have buffered events
-        if !buffer.isEmpty {
-            var events = (fullPayload["events"] as? [[String: Any]]) ?? []
-            events.append(contentsOf: buffer)
-            fullPayload["events"] = events
+        // Activity events since durable cursor
+        var eventDicts: [[String: Any]] = []
+        do {
+            let batch = try await activityLog.readEvents(since: cursor, limit: Self.eventsPerPush)
+            nextCursor = batch.nextOffset
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            for e in batch.events {
+                var d: [String: Any] = [
+                    "timestamp": iso.string(from: e.timestamp),
+                    "machineId": machineId,
+                    "type": e.type.rawValue,
+                    "summary": e.summary,
+                    "aiGenerated": e.aiGenerated,
+                ]
+                if let detail = e.detail { d["detail"] = detail }
+                if let b = e.beforeState { d["beforeState"] = b }
+                if let a = e.afterState { d["afterState"] = a }
+                eventDicts.append(d)
+            }
+        } catch {
+            Logger.storage.warning("CloudPusher: activity read failed — \(error.localizedDescription)")
+            nextCursor = cursor
         }
 
-        let data = try JSONSerialization.data(withJSONObject: fullPayload)
+        return ["metrics": metrics, "events": eventDicts]
+    }
+
+    private func pushToCloud(payload: [String: Any]) async throws {
+        let data = try JSONSerialization.data(withJSONObject: payload)
         var request = URLRequest(url: URL(string: apiURL)!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -294,14 +323,36 @@ struct CloudPusher: Service {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw CloudError.pushFailed(statusCode: code)
         }
-
-        // Success — clear buffer
-        buffer.removeAll()
     }
 
     private func processEntryDict(_ p: ProcessEntry) -> [String: Any] {
         ["pid": p.pid, "name": p.name, "cpuPercent": p.cpuPercent,
          "ramMB": round(Double(p.ramBytes) / 1_048_576 * 10) / 10, "system": p.isSystem]
+    }
+
+    // MARK: - Activity cursor persistence
+
+    private var cursorURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".heald/data/cloud_push_cursor")
+    }
+
+    private func cursorFileExists() -> Bool {
+        FileManager.default.fileExists(atPath: cursorURL.path)
+    }
+
+    private func loadCursor() -> UInt64 {
+        guard let raw = try? String(contentsOf: cursorURL, encoding: .utf8),
+              let v = UInt64(raw.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return 0
+        }
+        return v
+    }
+
+    private func saveCursor(_ offset: UInt64) {
+        let dir = cursorURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? String(offset).write(to: cursorURL, atomically: true, encoding: .utf8)
     }
 }
 

@@ -3,10 +3,14 @@ import OSLog
 
 /// NDJSON activity log for system events (LOG-01, LOG-04).
 /// Each line is a self-contained JSON object — human-grepable.
+/// Supports byte-offset cursor reads for CloudPusher (no re-send of old lines).
 actor ActivityLog {
     private let fileURL: URL
     private var fileHandle: FileHandle?
     private let maxSizeBytes: Int64
+
+    /// Path to the NDJSON file (for external cursor storage).
+    var path: String { fileURL.path }
 
     init(path: String, maxSizeMB: Int = 50) throws {
         let dir = (path as NSString).deletingLastPathComponent
@@ -40,6 +44,81 @@ actor ActivityLog {
         Logger.storage.info("Activity: \(event.type.rawValue) — \(event.summary)")
     }
 
+    // MARK: - Cursor reads (dashboard push)
+
+    /// Current end-of-file byte offset (after flush).
+    func endOffset() throws -> UInt64 {
+        try flushWriters()
+        let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        return (attrs[.size] as? UInt64) ?? (attrs[.size] as? NSNumber)?.uint64Value ?? 0
+    }
+
+    /// Read complete NDJSON lines starting at `offset`. Incomplete trailing line is not consumed.
+    /// If the file was rotated and is smaller than `offset`, reading restarts at 0.
+    func readEvents(since offset: UInt64, limit: Int = 50) throws -> ActivityReadBatch {
+        try flushWriters()
+
+        let size = try endOffset()
+        var pos = offset
+        if pos > size {
+            // Rotation or truncate — resync to start of new file
+            Logger.storage.info("ActivityLog cursor \(offset) past EOF \(size) — reset to 0")
+            pos = 0
+        }
+        if pos >= size || limit <= 0 {
+            return ActivityReadBatch(events: [], nextOffset: size)
+        }
+
+        let readHandle = try FileHandle(forReadingFrom: fileURL)
+        defer { try? readHandle.close() }
+        try readHandle.seek(toOffset: pos)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        var events: [ActivityEvent] = []
+        var buffer = Data()
+        var currentPos = pos
+        let maxReadBytes = 512 * 1024
+
+        while events.count < limit {
+            let remainingBudget = maxReadBytes - buffer.count
+            if remainingBudget <= 0 { break }
+
+            let chunk = try readHandle.read(upToCount: min(16_384, remainingBudget)) ?? Data()
+            if chunk.isEmpty {
+                // EOF — drop incomplete trailing line (keep currentPos before it)
+                break
+            }
+            buffer.append(chunk)
+
+            while events.count < limit {
+                guard let nl = buffer.firstIndex(of: 0x0A) else { break }
+                let lineLen = nl + 1 // include newline in offset advance
+                let lineData = buffer.subdata(in: buffer.startIndex..<nl)
+                buffer.removeSubrange(buffer.startIndex...nl)
+                currentPos += UInt64(lineLen)
+
+                guard !lineData.isEmpty else { continue }
+                if let event = try? decoder.decode(ActivityEvent.self, from: lineData) {
+                    events.append(event)
+                }
+                // Skip corrupt lines but still advance cursor (avoid stuck)
+            }
+
+            if chunk.count < 16_384 && buffer.firstIndex(of: 0x0A) == nil {
+                // Likely at EOF with partial line
+                break
+            }
+        }
+
+        return ActivityReadBatch(events: events, nextOffset: currentPos)
+    }
+
+    private func flushWriters() throws {
+        try fileHandle?.synchronize()
+    }
+
     // MARK: - Rotation (LOG-03)
 
     func rotateIfNeeded() throws {
@@ -64,6 +143,13 @@ actor ActivityLog {
     deinit {
         fileHandle?.closeFile()
     }
+}
+
+/// Result of a cursor-based activity read.
+struct ActivityReadBatch: Sendable {
+    let events: [ActivityEvent]
+    /// Byte offset to pass as `since` on the next successful push.
+    let nextOffset: UInt64
 }
 
 // MARK: - Event Types
@@ -177,4 +263,7 @@ enum EventType: String, Codable, Sendable {
 
     // Deep Clean
     case deepCleanCompleted = "deep_clean_completed"
+
+    // System log / fault scanner
+    case systemFault = "system_fault"
 }
