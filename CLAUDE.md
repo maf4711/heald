@@ -1,6 +1,6 @@
 # heald — Enterprise self-healing macOS daemon
 
-**Edition:** Enterprise 3.1 · **No Meister dependency**
+**Edition:** Enterprise 3.2 · **No Meister dependency** · Phase A bank pilot path
 
 | Product | Role |
 |---------|------|
@@ -11,11 +11,21 @@
 
 `SelfHealOrchestrator` every ~45s: detect → remediate (if consent=auto) → log → notify → fleet ACK.
 
-Plus: crash-loop quarantine, battery guardian, network DNS heal, optional safe softwareupdate, Slack webhooks.
+Plus: crash-loop quarantine, battery guardian, network DNS heal, optional safe softwareupdate, Slack webhooks, SIEM syslog, PII redaction.
 
-## Policy
+## Policy / Bank pilot
 
-`~/.heald/policy.json` — `heald policy --consent auto|ask|log`
+```bash
+heald policy --preset bank    # consent=log, cloud off, no kill
+heald policy --consent log
+heald policy --cloud-off
+heald enroll                  # per-device token
+heald compliance              # v2 inventory + CIS subset
+```
+
+`~/.heald/policy.json` · Device: `~/.heald/device.json`
+
+Env: `HEALD_CLOUD=0` · `HEALD_DEVICE_TOKEN` · `HEALD_SIEM_HOST` · `HEALD_API_KEY` (lab)
 
 ## Build / install
 
@@ -32,7 +42,13 @@ heald doctor
 ```bash
 heald doctor | status | maintain --profile quick|deep
 heald heal | autofix | storage | free
-heald policy | compliance | sudo-setup [--write]
+heald policy | enroll | compliance | sudo-setup | update
 ```
 
-See `docs/ENTERPRISE.md`.
+## Docs
+
+- `docs/ROADMAP-DEUTSCHE-BANK.md`
+- `docs/PHASE-A-SPRINT.md`
+- `docs/THREAT-MODEL.md`
+- `docs/BANK-ONEPAGER.md`
+- `docs/ENTERPRISE.md`

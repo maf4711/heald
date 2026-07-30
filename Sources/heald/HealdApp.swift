@@ -29,7 +29,7 @@ enum HealdMain {
 }
 
 struct HealdApp: AsyncParsableCommand {
-    static let version = "3.1.1"
+    static let version = "3.2.0"
 
     static let configuration = CommandConfiguration(
         commandName: "heald",
@@ -46,6 +46,7 @@ struct HealdApp: AsyncParsableCommand {
             FreeCommand.self,
             PolicyCommand.self,
             ComplianceCommand.self,
+            EnrollCommand.self,
             SudoSetupCommand.self,
             UpdateCommand.self,
             VersionCommand.self,
@@ -88,11 +89,18 @@ struct DoctorCommand: AsyncParsableCommand {
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
         let policy = PolicyPack.load()
+        let device = DeviceIdentity.load()
         print("heald doctor v\(HealdApp.version) — Enterprise")
         print(String(repeating: "─", count: 48))
         print("Edition:    enterprise (native self-heal)")
         print("Meister:    not required / not linked")
+        print("Preset:     \(policy.preset)")
         print("Consent:    \(policy.consent.rawValue)  selfHeal=\(policy.selfHealEnabled)")
+        print("Cloud:      \(policy.allowsCloud() ? "enabled" : "DISABLED (policy/HEALD_CLOUD=0)")")
+        print("PII redact: \(policy.piiRedaction)")
+        print("SIEM:       \(policy.siemSyslogEnabled || !(ProcessInfo.processInfo.environment["HEALD_SIEM_HOST"] ?? "").isEmpty ? "on" : "off")")
+        print("Device:     \(device.map { $0.deviceId } ?? "not enrolled — heald enroll")")
+        print("Auth:       \(DeviceIdentity.bearerToken() != nil ? "token/key present" : "none")")
         print("Sudo ticket:\(SudoTicket.hasTicket() ? "yes" : "no — heald sudo-setup")")
         print("Policy:     \(PolicyPack.policyURL.path)")
         print("Binary:     \(CommandLine.arguments.first ?? "heald")")
@@ -129,8 +137,8 @@ struct DoctorCommand: AsyncParsableCommand {
         let autoOff = ProcessInfo.processInfo.environment["HEALD_AUTO_UPDATE"] == "0"
         print("Update URL: \(AutoUpdateService.updateManifestURL())")
         print("Auto-update:\(autoOff ? "disabled" : "enabled")\(AutoUpdateService.isManagedInstall() ? " (managed install)" : " (non-install path — daemon skip)")")
-        print("Features:   policy · crash-loop · battery · network · updates · webhooks · fleet-ack · compliance")
-        print("CLI:        maintain | heal | autofix | storage | free | policy | compliance | sudo-setup | update")
+        print("Features:   policy · enroll · bank preset · pii · siem · compliance v2 · fleet")
+        print("CLI:        policy | enroll | compliance | maintain | heal | free | sudo-setup | update")
         let sh = dataDir.appendingPathComponent("self_heal.json")
         if let data = try? Data(contentsOf: sh),
            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -317,11 +325,20 @@ struct FreeCommand: AsyncParsableCommand {
 struct PolicyCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "policy",
-        abstract: "Show or set enterprise policy (consent, webhooks, thresholds)"
+        abstract: "Show or set enterprise policy (consent, bank preset, cloud, webhooks)"
     )
 
     @Option(name: .long, help: "auto|ask|log")
     var consent: String?
+
+    @Option(name: .long, help: "Apply preset: bank|lab")
+    var preset: String?
+
+    @Flag(name: .long, help: "Disable cloud push (bank default)")
+    var cloudOff: Bool = false
+
+    @Flag(name: .long, help: "Enable cloud push")
+    var cloudOn: Bool = false
 
     @Flag(name: .long, help: "Enable Slack webhook path (set URL in file)")
     var enableWebhook: Bool = false
@@ -331,6 +348,9 @@ struct PolicyCommand: AsyncParsableCommand {
 
     @Flag(name: .long, help: "Opt-in safe softwareupdate in maintenance window")
     var enableSafeUpdate: Bool = false
+
+    @Option(name: .long, help: "SIEM syslog host (enables UDP sink)")
+    var siemHost: String?
 
     @Flag(name: .long, help: "Print path and exit")
     var path: Bool = false
@@ -343,8 +363,31 @@ struct PolicyCommand: AsyncParsableCommand {
         }
         var p = PolicyPack.load()
         var changed = false
+
+        if let name = preset?.lowercased() {
+            switch name {
+            case "bank":
+                p = PolicyPack.bankPreset()
+                changed = true
+            case "lab", "default", "standard":
+                p = PolicyPack.labPreset()
+                changed = true
+            default:
+                print("Unknown preset '\(name)' — use bank|lab")
+                throw ExitCode(2)
+            }
+        }
+
         if let c = consent, let mode = ConsentMode(rawValue: c) {
             p.consent = mode
+            changed = true
+        }
+        if cloudOff {
+            p.cloudEnabled = false
+            changed = true
+        }
+        if cloudOn {
+            p.cloudEnabled = true
             changed = true
         }
         if enableWebhook {
@@ -360,6 +403,11 @@ struct PolicyCommand: AsyncParsableCommand {
             p.safeSoftwareUpdate = true
             changed = true
         }
+        if let host = siemHost {
+            p.siemSyslogHost = host
+            p.siemSyslogEnabled = true
+            changed = true
+        }
         if changed {
             p.save()
             await PolicyStore.shared.reload()
@@ -369,6 +417,51 @@ struct PolicyCommand: AsyncParsableCommand {
            let s = String(data: data, encoding: .utf8) {
             print(s)
         }
+    }
+}
+
+// MARK: - Enroll (device token)
+
+struct EnrollCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "enroll",
+        abstract: "Create per-device fleet identity + token (bank auth)"
+    )
+
+    @Flag(name: .long, help: "Rotate token even if enrolled")
+    var force: Bool = false
+
+    @Flag(name: .long, help: "Show existing enrollment only")
+    var show: Bool = false
+
+    func run() async throws {
+        setvbuf(stdout, nil, _IOLBF, 0)
+        if show {
+            if let d = DeviceIdentity.load() {
+                print("deviceId:  \(d.deviceId)")
+                print("hostname:  \(d.hostname)")
+                print("serial:    \(d.serialNumber ?? "—")")
+                print("hwUUID:    \(d.hardwareUUID ?? "—")")
+                print("enrolled:  \(d.enrolledAt)")
+                print("token:     \(d.token.prefix(8))… (\(d.token.count) hex chars)")
+                print("path:      \(DeviceIdentity.deviceURL.path)")
+                print("hint:      register token in fleet HEALD_API_KEYS or device allow-list")
+            } else {
+                print("Not enrolled — run: heald enroll")
+                throw ExitCode(1)
+            }
+            return
+        }
+        let d = try DeviceIdentity.enroll(force: force)
+        print("Enrolled heald device")
+        print("deviceId:  \(d.deviceId)")
+        print("serial:    \(d.serialNumber ?? "—")")
+        print("token:     \(d.token)")
+        print("path:      \(DeviceIdentity.deviceURL.path) (mode 600)")
+        print("")
+        print("Next (lab): add token to server HEALD_API_KEYS (or device registry).")
+        print("Next (bank): push token via secure enrollment API — never share shared keys.")
+        print("LaunchAgent: set HEALD_DEVICE_TOKEN in EnvironmentVariables (optional; file is enough).")
     }
 }
 

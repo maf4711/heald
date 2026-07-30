@@ -43,6 +43,7 @@ struct HealdService: Service {
         let loginItemsCollector = LoginItemsCollector(store: store)
         let debugWriter = DebugStatusWriter(store: store)
         let autoUpdate = AutoUpdateService()
+        let syslogSink = SyslogSink(activityLog: activityLog)
 
         let collectorGroup = ServiceGroup(
             services: [
@@ -52,7 +53,7 @@ struct HealdService: Service {
                 memoryLeakDetector, loginItemsCollector,
                 debugWriter, storageService, cloudPusher,
                 healingService, healthCheckService, notificationService,
-                maintenanceService, selfHeal, autoUpdate,
+                maintenanceService, selfHeal, autoUpdate, syslogSink,
             ],
             logger: .init(label: "com.heald.services")
         )

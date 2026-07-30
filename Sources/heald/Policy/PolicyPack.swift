@@ -9,9 +9,17 @@ enum ConsentMode: String, Codable, Sendable {
     case log   // log only, never change system
 }
 
+/// Named presets for regulated deployments.
+enum PolicyPreset: String, Codable, Sendable {
+    case lab      // developer defaults
+    case bank     // Deutsche Bank pilot-safe
+    case standard // alias of lab
+}
+
 struct PolicyPack: Codable, Sendable {
     var schema: String = "heald.policy/v1"
     var edition: String = "enterprise"
+    var preset: String = PolicyPreset.lab.rawValue
     var consent: ConsentMode = .auto
 
     // Feature toggles
@@ -27,6 +35,18 @@ struct PolicyPack: Codable, Sendable {
     var safeSoftwareUpdate: Bool = false  // opt-in: security patches only
     var webhookEnabled: Bool = false
     var fleetAckEnabled: Bool = true
+
+    // Phase A — bank / privacy / SIEM
+    /// When false, CloudPusher is idle (also HEALD_CLOUD=0).
+    var cloudEnabled: Bool = true
+    /// Redact paths/emails/IPs on outbound cloud + SIEM events.
+    var piiRedaction: Bool = true
+    /// UDP syslog to SIEM (or set HEALD_SIEM_HOST).
+    var siemSyslogEnabled: Bool = false
+    var siemSyslogHost: String? = nil
+    var siemSyslogPort: UInt16 = 514
+    /// Prefer device token over shared API key for fleet auth messaging.
+    var preferDeviceToken: Bool = true
 
     // Thresholds
     var diskFreePctCritical: Double = 8
@@ -59,6 +79,39 @@ struct PolicyPack: Codable, Sendable {
         return p
     }
 
+    /// Bank pilot preset — audit-first, no destructive defaults.
+    static func bankPreset() -> PolicyPack {
+        var p = PolicyPack()
+        p.preset = PolicyPreset.bank.rawValue
+        p.consent = .log
+        p.selfHealEnabled = true          // detect + log still run
+        p.processKillEnabled = false
+        p.diskCleanupEnabled = false
+        p.ramPurgeEnabled = false
+        p.firewallEnforce = false         // warn via health checks only
+        p.fileVaultWarn = true
+        p.crashLoopQuarantine = false
+        p.batteryGuardian = true
+        p.networkSelfHeal = false
+        p.safeSoftwareUpdate = false
+        p.webhookEnabled = false
+        p.fleetAckEnabled = true
+        p.cloudEnabled = false            // no telemetry until approved
+        p.piiRedaction = true
+        p.siemSyslogEnabled = false
+        p.preferDeviceToken = true
+        return p
+    }
+
+    static func labPreset() -> PolicyPack {
+        var p = PolicyPack()
+        p.preset = PolicyPreset.lab.rawValue
+        p.consent = .auto
+        p.cloudEnabled = true
+        p.piiRedaction = true
+        return p
+    }
+
     func save() {
         let dir = Self.policyURL.deletingLastPathComponent()
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -78,6 +131,12 @@ struct PolicyPack: Codable, Sendable {
     }
 
     func allowsLog() -> Bool { true }
+
+    /// Cloud push allowed (policy ∧ env).
+    func allowsCloud() -> Bool {
+        if ProcessInfo.processInfo.environment["HEALD_CLOUD"] == "0" { return false }
+        return cloudEnabled
+    }
 }
 
 /// Shared policy holder for services.
@@ -89,7 +148,7 @@ actor PolicyStore {
 
     func reload() {
         pack = .load()
-        Logger.lifecycle.info("Policy reloaded: consent=\(self.pack.consent.rawValue)")
+        Logger.lifecycle.info("Policy reloaded: consent=\(self.pack.consent.rawValue) preset=\(self.pack.preset)")
     }
 
     func update(_ mutate: (inout PolicyPack) -> Void) {

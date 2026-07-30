@@ -17,12 +17,12 @@ export type ClientRelease = {
 };
 
 const defaults: ClientRelease = {
-  version: "3.1.1",
-  url: "https://github.com/maf4711/heald/releases/download/v3.1.1/heald",
-  // shasum -a 256 .build/release/heald
-  sha256: "23d02ced4b1df0173c58f9afb36520dfdd4ec1dca838650a525ac90d4c12ee38",
+  version: "3.2.0",
+  url: "https://github.com/maf4711/heald/releases/latest/download/heald",
+  // Fill after release: shasum -a 256 .build/release/heald
+  sha256: "",
   minMacOS: "26.0",
-  notes: "heald 3.1.1: system error scanner, auto-update, enterprise self-heal",
+  notes: "Phase A bank pilot: bank preset, enroll, PII redaction, compliance v2, SIEM",
 };
 
 export function getClientRelease(): ClientRelease {

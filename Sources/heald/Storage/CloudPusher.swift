@@ -12,17 +12,12 @@ struct CloudPusher: Service {
     private static let eventsPerPush = 50
 
     // Configuration from environment or defaults
-    private var apiURL: String { ProcessInfo.processInfo.environment["HEALD_API_URL"] ?? "https://heald.sh/api/ingest" }
-    private var apiKey: String { ProcessInfo.processInfo.environment["HEALD_API_KEY"] ?? "" }
-    private var machineId: String { ProcessInfo.processInfo.environment["HEALD_MACHINE_ID"] ?? machineName() }
+    private var apiURL: String {
+        ProcessInfo.processInfo.environment["HEALD_API_URL"] ?? "https://heald.sh/api/ingest"
+    }
+    private var machineId: String { DeviceIdentity.machineId() }
 
     func run() async throws {
-        guard !apiKey.isEmpty else {
-            Logger.storage.info("CloudPusher: No HEALD_API_KEY set — cloud push disabled")
-            // Keep running but do nothing
-            while true { try await Task.sleep(for: .seconds(3600)) }
-        }
-
         var activityCursor = loadCursor()
         // On first start with empty cursor file: skip historical backlog (start at EOF)
         if !cursorFileExists() {
@@ -36,12 +31,25 @@ struct CloudPusher: Service {
         while true {
             try await Task.sleep(for: Self.pushInterval)
 
+            let policy = await PolicyStore.shared.current()
+            guard policy.allowsCloud() else {
+                Logger.storage.debug("CloudPusher: cloud disabled (policy/HEALD_CLOUD=0)")
+                continue
+            }
+            guard let bearer = DeviceIdentity.bearerToken(), !bearer.isEmpty else {
+                Logger.storage.info("CloudPusher: no device token / API key — push skipped")
+                continue
+            }
+
             var nextCursor = activityCursor
-            let payload = await buildPayload(cursor: activityCursor, nextCursor: &nextCursor)
+            let payload = await buildPayload(
+                cursor: activityCursor,
+                nextCursor: &nextCursor,
+                redact: policy.piiRedaction
+            )
 
             do {
-                try await pushToCloud(payload: payload)
-                // Advance durable cursor only after successful HTTP 200
+                try await pushToCloud(payload: payload, bearer: bearer)
                 if nextCursor != activityCursor {
                     activityCursor = nextCursor
                     saveCursor(activityCursor)
@@ -53,13 +61,12 @@ struct CloudPusher: Service {
                     Logger.storage.debug("CloudPusher: push OK")
                 }
             } catch {
-                // Cursor unchanged → same NDJSON range re-sent next tick
                 Logger.storage.warning("CloudPusher: push failed (cursor=\(activityCursor)) — \(error)")
             }
         }
     }
 
-    private func buildPayload(cursor: UInt64, nextCursor: inout UInt64) async -> [String: Any] {
+    private func buildPayload(cursor: UInt64, nextCursor: inout UInt64, redact: Bool) async -> [String: Any] {
         let cpu = await store.cpu
         let ram = await store.ram
         let disk = await store.disk
@@ -299,22 +306,29 @@ struct CloudPusher: Service {
                 if let detail = e.detail { d["detail"] = detail }
                 if let b = e.beforeState { d["beforeState"] = b }
                 if let a = e.afterState { d["afterState"] = a }
-                eventDicts.append(d)
+                eventDicts.append(redact ? PIIRedactor.redactEventDict(d) : d)
             }
         } catch {
             Logger.storage.warning("CloudPusher: activity read failed — \(error.localizedDescription)")
             nextCursor = cursor
         }
 
+        if redact, let host = metrics["hostname"] as? String {
+            metrics["hostname"] = PIIRedactor.redact(host)
+        }
+
         return ["metrics": metrics, "events": eventDicts]
     }
 
-    private func pushToCloud(payload: [String: Any]) async throws {
+    private func pushToCloud(payload: [String: Any], bearer: String) async throws {
         let data = try JSONSerialization.data(withJSONObject: payload)
         var request = URLRequest(url: URL(string: apiURL)!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
+        if let deviceId = DeviceIdentity.load()?.deviceId {
+            request.setValue(deviceId, forHTTPHeaderField: "X-Heald-Device-Id")
+        }
         request.httpBody = data
         request.timeoutInterval = 10
 
