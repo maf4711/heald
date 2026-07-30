@@ -3,7 +3,31 @@ import Foundation
 import ServiceLifecycle
 import OSLog
 
+/// Entry point: accept common version spellings before ArgumentParser.
+/// Supports: `--version`, `-version`, `-V`, `version`
 @main
+enum HealdMain {
+    static func main() async {
+        let args = Array(CommandLine.arguments.dropFirst())
+        if isVersionRequest(args) {
+            print(HealdApp.version)
+            return
+        }
+        await HealdApp.main()
+    }
+
+    private static func isVersionRequest(_ args: [String]) -> Bool {
+        // Only treat as version when the sole (or first-and-only) intent is version.
+        guard args.count == 1 else { return false }
+        switch args[0] {
+        case "--version", "-version", "-V", "-v", "version":
+            return true
+        default:
+            return false
+        }
+    }
+}
+
 struct HealdApp: AsyncParsableCommand {
     static let version = "3.1.1"
 
@@ -24,6 +48,7 @@ struct HealdApp: AsyncParsableCommand {
             ComplianceCommand.self,
             SudoSetupCommand.self,
             UpdateCommand.self,
+            VersionCommand.self,
         ],
         defaultSubcommand: RunCommand.self
     )
@@ -116,6 +141,18 @@ struct DoctorCommand: AsyncParsableCommand {
             }
         }
         print(String(repeating: "─", count: 48))
+    }
+}
+
+// MARK: - Version
+
+struct VersionCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "version",
+        abstract: "Print heald version"
+    )
+    func run() async throws {
+        print(HealdApp.version)
     }
 }
 
