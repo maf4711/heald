@@ -4,4 +4,5 @@ bun.lockb
 .vercel
 .env*.local
 .env*
+!.env.example
 dashboard/.env.local

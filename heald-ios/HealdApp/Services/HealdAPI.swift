@@ -8,7 +8,7 @@ actor HealdAPI {
     }
 
     private var apiKey: String {
-        UserDefaults.standard.string(forKey: "heald_api_key") ?? "REDACTED"
+        UserDefaults.standard.string(forKey: "heald_api_key") ?? ""
     }
 
     private let decoder: JSONDecoder = {

@@ -2,8 +2,5 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "framework": "nextjs",
-  "installCommand": "npm install",
-  "env": {
-    "HEALD_API_KEYS": "REDACTED"
-  }
+  "installCommand": "npm install"
 }

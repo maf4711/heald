@@ -2,6 +2,10 @@
 .swiftpm/
 .vercel
 .DS_Store
+.env*
+!.env.example
+dist/
+*.pkg
 *.xcodeproj
 heald-ios/Assets/
 heald-macos/Assets/

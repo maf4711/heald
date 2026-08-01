@@ -5,7 +5,7 @@ struct SettingsView: View {
 
     @Environment(AppState.self) private var appState
     @AppStorage("heald_api_url") private var apiURL = "https://heald.sh"
-    @AppStorage("heald_api_key") private var apiKey = "REDACTED"
+    @AppStorage("heald_api_key") private var apiKey = ""
     @AppStorage("heald_refresh_interval") private var refreshInterval = 10.0
     @AppStorage("heald_notifications_enabled") private var notificationsEnabled = true
     @State private var isTesting = false
