@@ -7,6 +7,7 @@ import {
   statusColor,
   ago,
   issueCount,
+  isMaccluster,
   HealthStatus,
 } from "@/lib/theme";
 
@@ -138,6 +139,14 @@ export function MachineTable({
               const sync = m.icloud?.syncPercent;
               const issues = issueCount(m);
               const selected = selectedId === m.machineId;
+              const mac = isMaccluster(m);
+              const mc = m.maccluster;
+              const nodesUp =
+                mc?.nodes_up ??
+                (mc?.nodes ?? []).filter((n) => n.reachability === "up").length;
+              const nodesTotal = mc?.nodes_total ?? mc?.nodes?.length ?? 0;
+              const nodeRatio =
+                nodesTotal > 0 ? (nodesUp / nodesTotal) * 100 : 0;
 
               return (
                 <tr
@@ -186,6 +195,20 @@ export function MachineTable({
                       title={m.hostname}
                     >
                       {m.hostname}
+                      {mac ? (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            fontSize: 9,
+                            fontWeight: 600,
+                            color: t.brand400,
+                            letterSpacing: "0.04em",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          mesh
+                        </span>
+                      ) : null}
                     </div>
                     <div
                       style={{
@@ -198,12 +221,18 @@ export function MachineTable({
                       }}
                       title={m.machineId}
                     >
-                      {m.machineId}
+                      {mac && mc?.overall
+                        ? `${mc.overall} · ${nodesUp}/${nodesTotal} nodes`
+                        : m.machineId}
                     </div>
                   </td>
                   <td style={{ padding: "8px 12px" }}>
                     <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                      <MiniBar value={cpu} />
+                      {mac ? (
+                        <MiniBar value={nodeRatio} />
+                      ) : (
+                        <MiniBar value={cpu} />
+                      )}
                     </div>
                   </td>
                   <td
@@ -211,39 +240,58 @@ export function MachineTable({
                       padding: "8px 12px",
                       textAlign: "right",
                       fontVariantNumeric: "tabular-nums",
-                      color:
-                        (m.ram?.pressureLevel ?? 0) >= 2 ? t.warning : t.text2,
+                      color: mac
+                        ? color
+                        : (m.ram?.pressureLevel ?? 0) >= 2
+                          ? t.warning
+                          : t.text2,
                     }}
                   >
-                    {(m.ram?.usedGB ?? 0).toFixed(1)}G
-                    {(m.ram?.pressureLevel ?? 0) >= 2 ? (
-                      <span style={{ color: t.warning, marginLeft: 4, fontSize: 10 }}>
-                        P{m.ram?.pressureLevel}
-                      </span>
-                    ) : null}
+                    {mac
+                      ? mc?.overall || "—"
+                      : (
+                        <>
+                          {(m.ram?.usedGB ?? 0).toFixed(1)}G
+                          {(m.ram?.pressureLevel ?? 0) >= 2 ? (
+                            <span style={{ color: t.warning, marginLeft: 4, fontSize: 10 }}>
+                              P{m.ram?.pressureLevel}
+                            </span>
+                          ) : null}
+                        </>
+                      )}
                   </td>
                   <td
                     style={{
                       padding: "8px 12px",
                       textAlign: "right",
                       fontVariantNumeric: "tabular-nums",
-                      color:
-                        diskFree != null && diskFree < 10
+                      color: mac
+                        ? mc?.service_running
+                          ? t.success
+                          : t.error
+                        : diskFree != null && diskFree < 10
                           ? t.error
                           : diskFree != null && diskFree < 20
                             ? t.warning
                             : t.text2,
                     }}
                   >
-                    {root ? `${root.freeGB.toFixed(0)}G` : "—"}
+                    {mac
+                      ? mc?.service_running
+                        ? "svc up"
+                        : "svc down"
+                      : root
+                        ? `${root.freeGB.toFixed(0)}G`
+                        : "—"}
                   </td>
                   <td
                     style={{
                       padding: "8px 12px",
                       textAlign: "right",
                       fontVariantNumeric: "tabular-nums",
-                      color:
-                        sync == null
+                      color: mac
+                        ? t.text2
+                        : sync == null
                           ? t.text3
                           : sync >= 99
                             ? t.success
@@ -252,10 +300,20 @@ export function MachineTable({
                               : t.error,
                     }}
                   >
-                    {sync == null ? "—" : `${sync.toFixed(0)}%`}
-                    {m.icloud && !m.icloud.birdRunning ? (
-                      <span style={{ color: t.error, marginLeft: 4, fontSize: 10 }}>bird</span>
-                    ) : null}
+                    {mac
+                      ? mc?.bridge?.admin_up
+                        ? "bridge up"
+                        : mc?.bridge?.exists
+                          ? "bridge down"
+                          : "—"
+                      : (
+                        <>
+                          {sync == null ? "—" : `${sync.toFixed(0)}%`}
+                          {m.icloud && !m.icloud.birdRunning ? (
+                            <span style={{ color: t.error, marginLeft: 4, fontSize: 10 }}>bird</span>
+                          ) : null}
+                        </>
+                      )}
                   </td>
                   <td
                     style={{

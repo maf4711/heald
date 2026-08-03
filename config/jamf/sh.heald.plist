@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Optional Managed Preferences domain seed for Jamf (P3.a).
+  Deploy as Custom Settings / MCX payload domain: sh.heald
+  heald currently reads ~/.heald/policy.json; a future build can merge this domain.
+  Until then use postinstall: heald policy --preset bank
+-->
+<plist version="1.0">
+<dict>
+	<key>preset</key>
+	<string>bank</string>
+	<key>consent</key>
+	<string>log</string>
+	<key>cloudEnabled</key>
+	<false/>
+	<key>autoUpdate</key>
+	<false/>
+	<key>processKillEnabled</key>
+	<false/>
+</dict>
+</plist>

@@ -64,13 +64,61 @@ export interface FleetMachine {
   uptime?: { systemSeconds: number; daemonSeconds: number; systemFormatted: string };
   thermal?: string;
   history?: { timestamp: string; cpu: number; ramUsedGB: number }[];
+  kind?: string;
+  tags?: string[];
+  /** Thunderbolt mesh cluster snapshot (from maccluster-heald-push) */
+  maccluster?: {
+    schema?: string;
+    cluster_name?: string;
+    overall?: string;
+    self_node_id?: string;
+    bridge?: {
+      name?: string;
+      exists?: boolean;
+      admin_up?: boolean;
+      addresses?: string[];
+    };
+    nodes?: {
+      id?: string;
+      ip?: string;
+      role?: string;
+      reachability?: string;
+      link_state?: string;
+      rtt_ms?: number | null;
+      notes?: string | string[] | null;
+    }[];
+    nodes_up?: number;
+    nodes_total?: number;
+    service_running?: boolean;
+    doctor_excerpt?: string;
+    source?: string;
+    ts?: string;
+  };
 }
 
 export const STALE_MS = 10 * 60_000;
 
+export function isMaccluster(m: FleetMachine): boolean {
+  return (
+    m.kind === "maccluster" ||
+    m.machineId?.startsWith("maccluster:") ||
+    !!m.maccluster
+  );
+}
+
 export function machineStatus(m: FleetMachine, now = Date.now()): HealthStatus {
   const age = now - new Date(m.lastSeen).getTime();
   if (age > STALE_MS || Number.isNaN(age)) return "stale";
+
+  // Virtual / attached maccluster entities use overall + service flags
+  if (isMaccluster(m) && m.maccluster) {
+    const o = (m.maccluster.overall || "").toLowerCase();
+    if (!m.maccluster.service_running) return "critical";
+    if (o === "down" || o === "critical" || o === "failed") return "critical";
+    if (o === "degraded" || o === "warning" || o === "partial") return "warning";
+    if (o === "healthy" || o === "up" || o === "ok") return "online";
+  }
+
   const ic = m.icloud;
   const pr = m.ram?.pressureLevel ?? 0;
   if (m.disk?.smart?.some((s) => s.status === "Failing")) return "critical";
@@ -109,6 +157,17 @@ export function ago(iso: string): string {
 }
 
 export function issueCount(m: FleetMachine): number {
+  if (isMaccluster(m) && m.maccluster) {
+    let n = 0;
+    if (!m.maccluster.service_running) n += 1;
+    const o = (m.maccluster.overall || "").toLowerCase();
+    if (o && o !== "healthy" && o !== "up" && o !== "ok") n += 1;
+    const total = m.maccluster.nodes_total ?? m.maccluster.nodes?.length ?? 0;
+    const up = m.maccluster.nodes_up ?? 0;
+    if (total > 0 && up < total) n += total - up;
+    if (machineStatus(m) === "stale") n += 1;
+    return n;
+  }
   const ic = m.icloud;
   let n = 0;
   if (ic) {

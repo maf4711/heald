@@ -20,10 +20,21 @@ const t = {
   info: "#3b82f6",
 };
 
+interface MacclusterNode {
+  id?: string;
+  ip?: string;
+  role?: string;
+  reachability?: string;
+  link_state?: string;
+  rtt_ms?: number | null;
+  notes?: string | string[] | null;
+}
+
 interface Machine {
   machineId: string;
   hostname: string;
   lastSeen: string;
+  kind?: string;
   cpu?: { overall: number; perCore: number[] };
   ram?: { usedGB: number; wiredGB: number; compressedGB: number; swapUsedMB: number; pressureLevel: number };
   disk?: { volumes: { name: string; mountPoint: string; totalGB: number; freeGB: number }[]; smart: { bsdName: string; status: string }[] };
@@ -40,12 +51,34 @@ interface Machine {
   uptime?: { systemSeconds: number; daemonSeconds: number; systemFormatted: string };
   thermal?: string;
   history: { timestamp: string; cpu: number; ramUsedGB: number }[];
+  maccluster?: {
+    cluster_name?: string;
+    overall?: string;
+    self_node_id?: string;
+    bridge?: { name?: string; exists?: boolean; admin_up?: boolean; addresses?: string[] };
+    nodes?: MacclusterNode[];
+    nodes_up?: number;
+    nodes_total?: number;
+    service_running?: boolean;
+    doctor_excerpt?: string;
+  };
+}
+
+function isMaccluster(m: Machine): boolean {
+  return m.kind === "maccluster" || m.machineId?.startsWith("maccluster:") || !!m.maccluster;
 }
 
 function healthColor(m: Machine): string {
+  if (Date.now() - new Date(m.lastSeen).getTime() > 600_000) return t.text3;
+  if (isMaccluster(m) && m.maccluster) {
+    const o = (m.maccluster.overall || "").toLowerCase();
+    if (!m.maccluster.service_running) return t.error;
+    if (o === "down" || o === "critical" || o === "failed") return t.error;
+    if (o === "degraded" || o === "warning" || o === "partial") return t.warning;
+    return t.success;
+  }
   const ic = m.icloud;
   const pr = m.ram?.pressureLevel ?? 0;
-  if (Date.now() - new Date(m.lastSeen).getTime() > 600_000) return t.text3;
   if (m.disk?.smart?.some((s) => s.status === "Failing")) return t.error;
   if (pr >= 4) return t.error;
   if (ic?.isEnabled && !ic.birdRunning) return t.error;
@@ -76,12 +109,17 @@ export function MachineCard({ machine: m }: { machine: Machine }) {
   const rootVol = m.disk?.volumes?.find((v) => v.mountPoint === "/");
   const isStale = Date.now() - new Date(m.lastSeen).getTime() > 600_000;
   const ic = m.icloud;
+  const mc = m.maccluster;
+  const mac = isMaccluster(m);
 
   const chartData = (m.history ?? []).slice(-60).map((h) => ({
     t: new Date(h.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     cpu: Math.round(h.cpu * 1000) / 10,
     ram: Math.round(h.ramUsedGB * 10) / 10,
   }));
+
+  const nodesUp = mc?.nodes_up ?? (mc?.nodes ?? []).filter((n) => n.reachability === "up").length;
+  const nodesTotal = mc?.nodes_total ?? (mc?.nodes?.length ?? 0);
 
   return (
     <div style={{
@@ -104,14 +142,88 @@ export function MachineCard({ machine: m }: { machine: Machine }) {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
           <strong style={{ fontSize: 15, fontWeight: 500, letterSpacing: "-0.01em" }}>{m.hostname}</strong>
+          {mac && <Tag text="maccluster" color={t.brand400} />}
         </div>
         <span style={{ fontSize: 11, color: t.text3 }}>
           {ago(m.lastSeen)}
-          {m.uptime?.systemFormatted ? ` \u00B7 up ${m.uptime.systemFormatted}` : ""}
+          {m.uptime?.systemFormatted ? ` \u00B7 ${mac ? m.uptime.systemFormatted : `up ${m.uptime.systemFormatted}`}` : ""}
         </span>
       </div>
 
-      {/* Gauges */}
+      {/* Maccluster cluster panel */}
+      {mac && mc && (
+        <div style={{
+          background: t.surfaceRaised, borderRadius: 8, padding: 10, marginBottom: 12,
+          border: `1px solid ${color}28`,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 500, color: t.text2, letterSpacing: "0.02em" }}>
+              Thunderbolt mesh · {mc.cluster_name || "cluster"}
+            </span>
+            <div style={{ display: "flex", gap: 4 }}>
+              <Tag text={mc.overall || "unknown"} color={color} />
+              <Tag
+                text={mc.service_running ? "heal svc up" : "heal svc down"}
+                color={mc.service_running ? t.success : t.error}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+            <Gauge
+              label="Nodes"
+              value={`${nodesUp}/${nodesTotal || "—"}`}
+              accent={nodesTotal > 0 && nodesUp < nodesTotal ? t.warning : t.success}
+            />
+            <Gauge
+              label="Bridge"
+              value={mc.bridge?.admin_up ? "up" : mc.bridge?.exists ? "down" : "—"}
+              sub={mc.bridge?.name}
+              accent={mc.bridge?.admin_up ? t.success : t.warning}
+            />
+            <Gauge
+              label="Self"
+              value={mc.self_node_id || "—"}
+            />
+          </div>
+
+          {(mc.nodes ?? []).length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {(mc.nodes ?? []).map((n) => {
+                const up = n.reachability === "up";
+                const nc = up ? t.success : t.error;
+                return (
+                  <div key={n.id || n.ip || Math.random().toString()} style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    fontSize: 11, color: t.text2, padding: "3px 0",
+                    borderTop: `1px solid ${t.border}`,
+                  }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: nc }} />
+                      <span style={{ color: t.text1, fontWeight: 500 }}>{n.id || "?"}</span>
+                      {n.role && <span style={{ color: t.text3 }}>{n.role}</span>}
+                      {n.ip && <span style={{ color: t.text3, fontFamily: "ui-monospace, monospace" }}>{n.ip}</span>}
+                    </span>
+                    <span style={{ color: nc, fontVariantNumeric: "tabular-nums" }}>
+                      {n.reachability || "?"}
+                      {typeof n.rtt_ms === "number" ? ` · ${n.rtt_ms.toFixed(1)}ms` : ""}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {mc.bridge?.addresses && mc.bridge.addresses.length > 0 && (
+            <div style={{ marginTop: 8, fontSize: 10, color: t.text3, fontFamily: "ui-monospace, monospace" }}>
+              {mc.bridge.addresses.join(" · ")}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Host gauges (skip empty virtual maccluster host metrics) */}
+      {!mac && (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
         <Gauge label="CPU" value={`${((m.cpu?.overall ?? 0) * 100).toFixed(0)}%`}
           accent={(m.cpu?.overall ?? 0) > 0.8 ? t.error : undefined} />
@@ -121,6 +233,7 @@ export function MachineCard({ machine: m }: { machine: Machine }) {
         <Gauge label="Disk"
           value={rootVol ? `${(rootVol.totalGB - rootVol.freeGB).toFixed(0)}/${rootVol.totalGB.toFixed(0)}G` : "\u2014"} />
       </div>
+      )}
 
       {/* iCloud */}
       {ic && (

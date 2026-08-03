@@ -47,6 +47,8 @@ struct PolicyPack: Codable, Sendable {
     var siemSyslogPort: UInt16 = 514
     /// Prefer device token over shared API key for fleet auth messaging.
     var preferDeviceToken: Bool = true
+    /// When true/nil, daemon polls /api/update (unless HEALD_AUTO_UPDATE=0). Optional for old policy.json.
+    var autoUpdateEnabled: Bool? = true
 
     // Thresholds
     var diskFreePctCritical: Double = 8
@@ -70,13 +72,92 @@ struct PolicyPack: Codable, Sendable {
 
     static func load() -> PolicyPack {
         let url = policyURL
+        var p: PolicyPack
         if let data = try? Data(contentsOf: url),
-           let p = try? JSONDecoder().decode(PolicyPack.self, from: data) {
-            return p
+           let decoded = try? JSONDecoder().decode(PolicyPack.self, from: data) {
+            p = decoded
+        } else {
+            p = PolicyPack()
+            p.save()
         }
-        let p = PolicyPack()
-        p.save()
+        // Wave 2: MDM / Managed Preferences override local file (Jamf domain sh.heald)
+        applyManagedOverrides(to: &p)
         return p
+    }
+
+    /// Merge keys from Managed Preferences domain `sh.heald` (and `com.heald.policy`).
+    /// MDM wins over local policy.json for bank control.
+    static func applyManagedOverrides(to p: inout PolicyPack) {
+        let domains = ["sh.heald", "com.heald.policy"]
+        for domain in domains {
+            if let s = cfString("consent", domain: domain), let mode = ConsentMode(rawValue: s) {
+                p.consent = mode
+            }
+            if let s = cfString("preset", domain: domain) {
+                p.preset = s
+            }
+            if let b = cfBool("cloudEnabled", domain: domain) {
+                p.cloudEnabled = b
+            }
+            if let b = cfBool("selfHealEnabled", domain: domain) {
+                p.selfHealEnabled = b
+            }
+            if let b = cfBool("processKillEnabled", domain: domain) {
+                p.processKillEnabled = b
+            }
+            if let b = cfBool("diskCleanupEnabled", domain: domain) {
+                p.diskCleanupEnabled = b
+            }
+            if let b = cfBool("ramPurgeEnabled", domain: domain) {
+                p.ramPurgeEnabled = b
+            }
+            if let b = cfBool("piiRedaction", domain: domain) {
+                p.piiRedaction = b
+            }
+            if let b = cfBool("siemSyslogEnabled", domain: domain) {
+                p.siemSyslogEnabled = b
+            }
+            if let s = cfString("siemSyslogHost", domain: domain) {
+                p.siemSyslogHost = s
+            }
+            if let b = cfBool("autoUpdate", domain: domain) {
+                p.autoUpdateEnabled = b
+                if !b { setenv("HEALD_AUTO_UPDATE", "0", 1) }
+            }
+            if let b = cfBool("autoUpdateEnabled", domain: domain) {
+                p.autoUpdateEnabled = b
+                if !b { setenv("HEALD_AUTO_UPDATE", "0", 1) }
+            }
+        }
+    }
+
+    private static func cfString(_ key: String, domain: String) -> String? {
+        CFPreferencesCopyAppValue(key as CFString, domain as CFString) as? String
+    }
+
+    private static func cfBool(_ key: String, domain: String) -> Bool? {
+        guard let v = CFPreferencesCopyAppValue(key as CFString, domain as CFString) else { return nil }
+        if let b = v as? Bool { return b }
+        if let n = v as? NSNumber { return n.boolValue }
+        if let s = v as? String {
+            switch s.lowercased() {
+            case "true", "1", "yes": return true
+            case "false", "0", "no": return false
+            default: return nil
+            }
+        }
+        return nil
+    }
+
+    /// True if any managed preference domain is present.
+    static func hasManagedPolicy() -> Bool {
+        for domain in ["sh.heald", "com.heald.policy"] {
+            if CFPreferencesCopyAppValue("consent" as CFString, domain as CFString) != nil
+                || CFPreferencesCopyAppValue("preset" as CFString, domain as CFString) != nil {
+                return true
+            }
+        }
+        return false
     }
 
     /// Bank pilot preset — audit-first, no destructive defaults.
@@ -100,6 +181,8 @@ struct PolicyPack: Codable, Sendable {
         p.piiRedaction = true
         p.siemSyslogEnabled = false
         p.preferDeviceToken = true
+        // Distribution still allowed; cloud metrics stay off
+        p.autoUpdateEnabled = true // fleet distribution on; cloud metrics still off
         return p
     }
 
@@ -109,6 +192,7 @@ struct PolicyPack: Codable, Sendable {
         p.consent = .auto
         p.cloudEnabled = true
         p.piiRedaction = true
+        p.autoUpdateEnabled = true
         return p
     }
 

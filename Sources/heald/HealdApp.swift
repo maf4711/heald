@@ -29,7 +29,7 @@ enum HealdMain {
 }
 
 struct HealdApp: AsyncParsableCommand {
-    static let version = "3.2.0"
+    static let version = "3.5.0"
 
     static let configuration = CommandConfiguration(
         commandName: "heald",
@@ -47,6 +47,7 @@ struct HealdApp: AsyncParsableCommand {
             PolicyCommand.self,
             ComplianceCommand.self,
             EnrollCommand.self,
+            ApproveCommand.self,
             SudoSetupCommand.self,
             UpdateCommand.self,
             VersionCommand.self,
@@ -99,6 +100,7 @@ struct DoctorCommand: AsyncParsableCommand {
         print("Cloud:      \(policy.allowsCloud() ? "enabled" : "DISABLED (policy/HEALD_CLOUD=0)")")
         print("PII redact: \(policy.piiRedaction)")
         print("SIEM:       \(policy.siemSyslogEnabled || !(ProcessInfo.processInfo.environment["HEALD_SIEM_HOST"] ?? "").isEmpty ? "on" : "off")")
+        print("MDM policy: \(PolicyPack.hasManagedPolicy() ? "active (sh.heald overrides)" : "none")")
         print("Device:     \(device.map { $0.deviceId } ?? "not enrolled — heald enroll")")
         print("Auth:       \(DeviceIdentity.bearerToken() != nil ? "token/key present" : "none")")
         print("Sudo ticket:\(SudoTicket.hasTicket() ? "yes" : "no — heald sudo-setup")")
@@ -134,11 +136,18 @@ struct DoctorCommand: AsyncParsableCommand {
         }
 
         print(String(repeating: "─", count: 48))
-        let autoOff = ProcessInfo.processInfo.environment["HEALD_AUTO_UPDATE"] == "0"
+        let autoAllowed = AutoUpdateService.isAutoUpdateAllowed(policy: policy)
+        let autoOffPlist = launchAgentEnvValue("HEALD_AUTO_UPDATE") == "0"
         print("Update URL: \(AutoUpdateService.updateManifestURL())")
-        print("Auto-update:\(autoOff ? "disabled" : "enabled")\(AutoUpdateService.isManagedInstall() ? " (managed install)" : " (non-install path — daemon skip)")")
-        print("Features:   policy · enroll · bank preset · pii · siem · compliance v2 · fleet")
-        print("CLI:        policy | enroll | compliance | maintain | heal | free | sudo-setup | update")
+        print("Auto-update:\(autoAllowed ? "ON" : "OFF") interval=\(AutoUpdateService.pollIntervalSec())s\(AutoUpdateService.isManagedInstall() ? " managed" : " non-managed")\(autoOffPlist ? " (plist off)" : "")")
+        if let st = AutoUpdateService.readStatus() {
+            let state = st["state"] as? String ?? "?"
+            let detail = st["detail"] as? String ?? ""
+            let remote = st["remoteVersion"] as? String
+            print("Update last:\(state) \(detail)\(remote.map { " remote=\($0)" } ?? "")")
+        }
+        print("Features:   policy · mdm · enroll · approve · bank · pii · siem · compliance v2")
+        print("CLI:        policy | enroll | approve | compliance | maintain | heal | free | update")
         let sh = dataDir.appendingPathComponent("self_heal.json")
         if let data = try? Data(contentsOf: sh),
            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -204,7 +213,14 @@ struct UpdateCommand: AsyncParsableCommand {
             let applied = try await AutoUpdateService.checkAndApply(force: force)
             if applied {
                 print("Installed \(manifest.version) → \(AutoUpdateService.installBinaryURL().path)")
-                print("Restart daemon: launchctl kickstart -k \"gui/$(id -u)/com.heald.daemon\"")
+                print("Restarting daemon…")
+                let uid = getuid()
+                _ = ShellRunner.run(
+                    "/bin/launchctl",
+                    arguments: ["kickstart", "-k", "gui/\(uid)/com.heald.daemon"],
+                    timeoutSeconds: 10
+                )
+                print("Done. Verify: heald --version && heald doctor")
             } else {
                 print("Already up to date.")
             }
@@ -352,6 +368,12 @@ struct PolicyCommand: AsyncParsableCommand {
     @Option(name: .long, help: "SIEM syslog host (enables UDP sink)")
     var siemHost: String?
 
+    @Flag(name: .long, help: "Enable client auto-update from heald.sh")
+    var autoUpdateOn: Bool = false
+
+    @Flag(name: .long, help: "Disable client auto-update")
+    var autoUpdateOff: Bool = false
+
     @Flag(name: .long, help: "Print path and exit")
     var path: Bool = false
 
@@ -408,6 +430,14 @@ struct PolicyCommand: AsyncParsableCommand {
             p.siemSyslogEnabled = true
             changed = true
         }
+        if autoUpdateOn {
+            p.autoUpdateEnabled = true
+            changed = true
+        }
+        if autoUpdateOff {
+            p.autoUpdateEnabled = false
+            changed = true
+        }
         if changed {
             p.save()
             await PolicyStore.shared.reload()
@@ -434,6 +464,15 @@ struct EnrollCommand: AsyncParsableCommand {
     @Flag(name: .long, help: "Show existing enrollment only")
     var show: Bool = false
 
+    @Flag(name: .long, help: "POST device to fleet /api/enroll (needs HEALD_ADMIN_KEY)")
+    var register: Bool = false
+
+    @Option(name: .long, help: "Fleet base URL (default https://heald.sh)")
+    var fleetURL: String?
+
+    @Option(name: .long, help: "Admin API key for register (or HEALD_ADMIN_KEY / HEALD_API_KEY)")
+    var adminKey: String?
+
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
         if show {
@@ -445,7 +484,7 @@ struct EnrollCommand: AsyncParsableCommand {
                 print("enrolled:  \(d.enrolledAt)")
                 print("token:     \(d.token.prefix(8))… (\(d.token.count) hex chars)")
                 print("path:      \(DeviceIdentity.deviceURL.path)")
-                print("hint:      register token in fleet HEALD_API_KEYS or device allow-list")
+                print("hint:      heald enroll --register  (admin key) or HEALD_DEVICE_TOKENS")
             } else {
                 print("Not enrolled — run: heald enroll")
                 throw ExitCode(1)
@@ -458,10 +497,85 @@ struct EnrollCommand: AsyncParsableCommand {
         print("serial:    \(d.serialNumber ?? "—")")
         print("token:     \(d.token)")
         print("path:      \(DeviceIdentity.deviceURL.path) (mode 600)")
-        print("")
-        print("Next (lab): add token to server HEALD_API_KEYS (or device registry).")
-        print("Next (bank): push token via secure enrollment API — never share shared keys.")
-        print("LaunchAgent: set HEALD_DEVICE_TOKEN in EnvironmentVariables (optional; file is enough).")
+
+        if register {
+            let base = fleetURL
+                ?? ProcessInfo.processInfo.environment["HEALD_FLEET_URL"]
+                ?? "https://heald.sh"
+            let key = adminKey
+                ?? ProcessInfo.processInfo.environment["HEALD_ADMIN_KEY"]
+                ?? ProcessInfo.processInfo.environment["HEALD_API_KEY"]
+                ?? ""
+            guard !key.isEmpty else {
+                print("Error: --register needs HEALD_ADMIN_KEY or --admin-key")
+                throw ExitCode(2)
+            }
+            guard let url = URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/enroll") else {
+                print("Error: bad fleet URL")
+                throw ExitCode(2)
+            }
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+            let body: [String: Any] = [
+                "deviceId": d.deviceId,
+                "token": d.token,
+                "hostname": d.hostname,
+                "serialNumber": d.serialNumber as Any,
+            ]
+            req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+            req.timeoutInterval = 15
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            let text = String(data: data, encoding: .utf8) ?? ""
+            if code == 200 {
+                print("Registered with fleet \(url.absoluteString)")
+            } else {
+                print("Fleet register failed HTTP \(code): \(text.prefix(200))")
+                throw ExitCode(1)
+            }
+        } else {
+            print("")
+            print("Next: heald enroll --register   # push token to fleet admin registry")
+            print("  or: add token to HEALD_DEVICE_TOKENS / HEALD_API_KEYS on server")
+        }
+    }
+}
+
+// MARK: - Approve (consent=ask)
+
+struct ApproveCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "approve",
+        abstract: "Record one-shot approval for a blocked self-heal action (consent=ask)"
+    )
+
+    @Argument(help: "Action key, e.g. ram_purge, disk_cleanup, firewall_on")
+    var action: String
+
+    @Option(name: .long, help: "Minutes until approval expires (default 60)")
+    var ttlMinutes: Int = 60
+
+    func run() async throws {
+        setvbuf(stdout, nil, _IOLBF, 0)
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".heald/approvals.json")
+        var dict: [String: Any] = [:]
+        if let data = try? Data(contentsOf: url),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            dict = obj
+        }
+        let exp = Date().addingTimeInterval(TimeInterval(ttlMinutes * 60))
+        dict[action] = ISO8601DateFormatter().string(from: exp)
+        let dir = url.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: url, options: .atomic)
+        }
+        print("Approved '\(action)' until \(dict[action] ?? "?")")
+        print("File: \(url.path)")
+        print("Note: SelfHeal checks this file when consent=ask")
     }
 }
 
@@ -518,5 +632,17 @@ private func openActivityLog() throws -> ActivityLog {
         withIntermediateDirectories: true
     )
     return try ActivityLog(path: path)
+}
+
+/// Read EnvironmentVariables from user LaunchAgent plist (doctor CLI context).
+private func launchAgentEnvValue(_ key: String) -> String? {
+    let plist = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/LaunchAgents/com.heald.daemon.plist")
+    guard let data = try? Data(contentsOf: plist),
+          let obj = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+          let env = obj["EnvironmentVariables"] as? [String: String] else {
+        return nil
+    }
+    return env[key]
 }
 

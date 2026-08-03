@@ -17,12 +17,11 @@ export type ClientRelease = {
 };
 
 const defaults: ClientRelease = {
-  version: "3.2.0",
+  version: "3.5.0",
   url: "https://github.com/maf4711/heald/releases/latest/download/heald",
-  // Fill after release: shasum -a 256 .build/release/heald
-  sha256: "",
+  sha256: "4382e718380e390909d3ed1b0953d40087da34989d9a4bf0c42ff7528c05a13a",
   minMacOS: "26.0",
-  notes: "Phase A bank pilot: bank preset, enroll, PII redaction, compliance v2, SIEM",
+  notes: "heald 3.5.0 — auto-distribution enabled (poll /api/update)",
 };
 
 export function getClientRelease(): ClientRelease {

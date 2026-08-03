@@ -1,0 +1,52 @@
+name: ci
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  docs-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Required docs present
+        run: |
+          test -f docs/ROADMAP.md
+          test -f docs/THREAT-MODEL.md
+          test -f docs/SMOKE-TEST.md
+          test -f docs/WAVE-2.md || test -f docs/ROADMAP.md
+          test -f scripts/smoke-test.sh
+          test -f scripts/install-bank.sh
+          test -f scripts/build-pkg.sh
+          bash -n scripts/smoke-test.sh
+          bash -n scripts/install-bank.sh
+          bash -n scripts/build-pkg.sh
+          bash -n scripts/reviewer-pack.sh
+          bash -n scripts/trust-status.sh
+          echo "docs+scripts ok"
+
+  dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install & typecheck build
+        run: |
+          if [ -f package-lock.json ]; then npm ci; elif [ -f bun.lock ]; then npm install; else npm install; fi
+          npm run build
+
+  macos-build:
+    runs-on: macos-15
+    # Free-tier may skip; keep best-effort
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift build
+        run: swift build -c release
+      - name: Version
+        run: .build/release/heald --version

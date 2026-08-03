@@ -1,8 +1,10 @@
 # Phase A Sprint — Bank Pilot Ready
 
-**Roadmap:** [ROADMAP-DEUTSCHE-BANK.md](./ROADMAP-DEUTSCHE-BANK.md)  
+**Roadmap:** [ROADMAP-DEUTSCHE-BANK.md](./ROADMAP-DEUTSCHE-BANK.md) · **Elon-Cut:** [ELON-CUT-BANK.md](./ELON-CUT-BANK.md)  
 **Version target:** 3.2.x  
-**Goal:** notarization-ready binary path, bank-safe defaults, no shared-secret only auth, no-cloud mode, audit/SIEM/PII basics.
+
+**Goal (after algorithm):** signed/installable sensor + bank log-only defaults + device id + one compliance JSON + threat model.  
+**Not goal:** SIEM/SSO/Fleet platform (parked until Named Reviewer asks).
 
 ## Sprint board
 

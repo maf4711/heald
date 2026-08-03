@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.heald.daemon</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>__HEALD_BINARY__</string>
+		<string>run</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>LowPriorityIO</key>
+	<true/>
+	<key>Nice</key>
+	<integer>5</integer>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HEALD_CLOUD</key>
+		<string>0</string>
+		<!-- Client auto-distribution ON: poll heald.sh/api/update every ~30min -->
+		<key>HEALD_AUTO_UPDATE</key>
+		<string>1</string>
+		<key>HEALD_UPDATE_INTERVAL_SEC</key>
+		<string>1800</string>
+	</dict>
+	<key>StandardOutPath</key>
+	<string>/tmp/heald.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>/tmp/heald.err.log</string>
+</dict>
+</plist>

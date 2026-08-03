@@ -166,21 +166,26 @@ struct SelfHealOrchestrator: Service {
         let cd = cooldowns[key] ?? 900
         guard await state.canFire(key: key, cooldown: cd) else { return }
 
-        // Consent: log-only never remediates; ask notifies and logs
+        // Consent: log-only never remediates; ask needs `heald approve <key>` (or consent=auto)
         if !policy.allowsRemediation() {
-            try? await activityLog.log(event: ActivityEvent(
-                type: .healingAttempt,
-                summary: "Self-heal BLOCKED by consent=\(policy.consent.rawValue): \(key)",
-                detail: reason
-            ))
-            if policy.consent == .ask {
-                NotificationService.sendNotification(
-                    title: "heald needs approval",
-                    message: "\(key): \(reason) — set policy consent=auto or heald policy --consent auto"
-                )
+            if policy.consent == .ask, ApprovalStore.consume(action: key) {
+                Logger.healer.info("Self-heal [\(key)]: approved one-shot — \(reason)")
+                // fall through to remediate
+            } else {
+                try? await activityLog.log(event: ActivityEvent(
+                    type: .healingAttempt,
+                    summary: "Self-heal BLOCKED by consent=\(policy.consent.rawValue): \(key)",
+                    detail: reason
+                ))
+                if policy.consent == .ask {
+                    NotificationService.sendNotification(
+                        title: "heald needs approval",
+                        message: "\(key): \(reason) — heald approve \(key)"
+                    )
+                }
+                await state.markFired(key: key) // avoid spam
+                return
             }
-            await state.markFired(key: key) // avoid spam
-            return
         }
 
         Logger.healer.info("Self-heal [\(key)]: \(reason)")

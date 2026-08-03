@@ -210,13 +210,16 @@ async function readBlobCache(): Promise<StoreSnapshot | null> {
   const token = process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) return null;
   try {
-    const { list } = await import("@vercel/blob");
-    const { blobs } = await list({ prefix: BLOB_PATHNAME, limit: 5, token });
-    const hit = blobs.find((b) => b.pathname === BLOB_PATHNAME) ?? blobs[0];
-    if (!hit?.url) return null;
-    const res = await fetch(hit.url, { cache: "no-store" });
-    if (!res.ok) return null;
-    return (await res.json()) as StoreSnapshot;
+    const { get } = await import("@vercel/blob");
+    const result = await get(BLOB_PATHNAME, {
+      access: "private",
+      token,
+      useCache: false,
+    });
+    if (!result || result.statusCode !== 200 || !result.stream) return null;
+    const text = await new Response(result.stream).text();
+    if (!text) return null;
+    return JSON.parse(text) as StoreSnapshot;
   } catch {
     return null;
   }
@@ -227,14 +230,16 @@ async function writeBlobCache(snap: StoreSnapshot) {
   if (!token) return;
   try {
     const { put } = await import("@vercel/blob");
+    // Private store (heald-fleet) + overwrite same pathname
     await put(BLOB_PATHNAME, JSON.stringify(snap), {
-      access: "public",
+      access: "private",
       addRandomSuffix: false,
+      allowOverwrite: true,
       token,
       contentType: "application/json",
     });
   } catch {
-    /* optional */
+    /* optional durability path */
   }
 }
 
@@ -245,6 +250,7 @@ async function hydrate() {
   const tmp = readTmpCache();
   if (tmp) applySnapshot(s, tmp);
 
+  // Always try blob when machines empty (cross-instance recovery)
   if (s.machines.size === 0) {
     const blob = await readBlobCache();
     if (blob) {
@@ -256,15 +262,19 @@ async function hydrate() {
   s.hydrated = true;
 }
 
-function persist(force = false) {
+async function persist(force = false) {
   const s = state();
   const now = Date.now();
-  if (!force && now - s.lastPersistMs < PERSIST_MIN_INTERVAL_MS) return;
+  if (!force && now - s.lastPersistMs < PERSIST_MIN_INTERVAL_MS) {
+    // Still flush tmp so same-isolate reads are fresh
+    writeTmpCache(snapshotFromState(s));
+    return;
+  }
   s.lastPersistMs = now;
   const snap = snapshotFromState(s);
   writeTmpCache(snap);
-  // Fire-and-forget blob write
-  void writeBlobCache(snap);
+  // Await blob so serverless does not freeze mid-write
+  await writeBlobCache(snap);
 }
 
 export async function upsertMachine(data: MachineMetrics) {
@@ -301,7 +311,7 @@ export async function upsertMachine(data: MachineMetrics) {
     }
   }
 
-  persist();
+  await persist(true);
 }
 
 export async function addEvent(entry: ActivityEntry) {
@@ -309,7 +319,7 @@ export async function addEvent(entry: ActivityEntry) {
   const s = state();
   s.events.unshift(entry);
   if (s.events.length > MAX_EVENTS) s.events.length = MAX_EVENTS;
-  persist();
+  await persist(true);
 }
 
 export async function getMachines(): Promise<MachineMetrics[]> {

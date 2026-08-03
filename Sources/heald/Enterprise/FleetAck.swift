@@ -43,8 +43,8 @@ enum FleetAck {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let key = ProcessInfo.processInfo.environment["HEALD_API_KEY"], !key.isEmpty {
-            req.setValue(key, forHTTPHeaderField: "Authorization")
+        if let key = DeviceIdentity.bearerToken(), !key.isEmpty {
+            req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
             req.setValue(key, forHTTPHeaderField: "X-API-Key")
         }
         req.httpBody = try? JSONSerialization.data(withJSONObject: event)

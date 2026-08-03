@@ -3,44 +3,57 @@ import CryptoKit
 import ServiceLifecycle
 import OSLog
 
-/// Periodically checks heald.sh `/api/update` and replaces the installed binary when newer.
-/// After a successful replace, exits so launchd KeepAlive restarts the new binary.
+/// Polls heald.sh `/api/update` and auto-replaces `~/Library/heald/heald` when remote is newer.
+/// After a successful install, exits so launchd KeepAlive starts the new binary.
+///
+/// Control:
+/// - Env `HEALD_AUTO_UPDATE=0` → off
+/// - Policy `autoUpdateEnabled=false` → off
+/// - Env `HEALD_UPDATE_INTERVAL_SEC` (default 1800 = 30 min)
 struct AutoUpdateService: Service {
-    /// How often to poll the update manifest.
-    private static let checkInterval: Duration = .seconds(6 * 3600)
-    /// Short delay after start so collectors come up first.
-    private static let startupDelay: Duration = .seconds(30)
+    private static let defaultIntervalSec: Int = 1800
+    private static let startupDelay: Duration = .seconds(45)
 
     func run() async throws {
-        if ProcessInfo.processInfo.environment["HEALD_AUTO_UPDATE"] == "0" {
-            Logger.update.info("Auto-update disabled (HEALD_AUTO_UPDATE=0)")
-            while true { try await Task.sleep(for: .seconds(3600)) }
-        }
-
-        guard Self.isManagedInstall() else {
-            Logger.update.info("Auto-update skipped — binary not at ~/Library/heald/heald")
-            while true { try await Task.sleep(for: .seconds(3600)) }
-        }
-
         try await Task.sleep(for: Self.startupDelay)
 
         while true {
+            let policy = await PolicyStore.shared.current()
+            if !Self.isAutoUpdateAllowed(policy: policy) {
+                Logger.update.info("Auto-update disabled (env/policy)")
+                writeStatus(state: "disabled", detail: "HEALD_AUTO_UPDATE=0 or policy.autoUpdateEnabled=false")
+                try await Task.sleep(for: .seconds(3600))
+                continue
+            }
+
+            guard Self.isManagedInstall() else {
+                Logger.update.info("Auto-update skipped — not managed install path")
+                writeStatus(state: "skipped", detail: "binary not at ~/Library/heald/heald")
+                try await Task.sleep(for: .seconds(3600))
+                continue
+            }
+
             do {
                 if try await Self.checkAndApply(force: false) {
                     Logger.update.info("Auto-update applied — exiting for launchd restart")
-                    // launchd KeepAlive will relaunch the new binary
+                    writeStatus(state: "updated", detail: "restarting")
+                    await FleetAck.record(action: "auto_update", result: "ok", detail: "restart")
                     Foundation.exit(0)
+                } else {
+                    writeStatus(state: "ok", detail: "up to date \(HealdApp.version)")
                 }
             } catch {
                 Logger.update.warning("Auto-update check failed: \(error.localizedDescription)")
+                writeStatus(state: "error", detail: error.localizedDescription)
             }
-            try await Task.sleep(for: Self.checkInterval)
+
+            try await Task.sleep(for: .seconds(Self.pollIntervalSec()))
         }
     }
 
     // MARK: - Public (CLI)
 
-    /// Returns true if the binary was replaced and the process should exit/restart.
+    /// Returns true if the binary was replaced (caller should restart).
     @discardableResult
     static func checkAndApply(force: Bool) async throws -> Bool {
         let manifest = try await fetchManifest()
@@ -51,10 +64,10 @@ struct AutoUpdateService: Service {
             return false
         }
 
-        if !force {
-            Logger.update.info("Update available: \(local) → \(manifest.version)")
-        } else {
+        if force {
             Logger.update.info("Forced update to \(manifest.version) (local \(local))")
+        } else {
+            Logger.update.info("Update available: \(local) → \(manifest.version)")
         }
 
         guard let downloadURL = URL(string: manifest.url) else {
@@ -66,12 +79,23 @@ struct AutoUpdateService: Service {
         let backupURL = installURL.deletingLastPathComponent().appendingPathComponent("heald.bak")
 
         try await download(from: downloadURL, to: tempURL)
-
         try verifyBinary(at: tempURL, expectedSHA256: manifest.sha256)
-
         try replaceBinary(install: installURL, temp: tempURL, backup: backupURL)
 
+        // Keep /opt/homebrew/bin/heald symlink if it points at us
+        refreshHomebrewSymlinkIfNeeded(install: installURL)
+
         Logger.update.info("Installed heald \(manifest.version) at \(installURL.path)")
+        writeStatus(
+            state: "installed",
+            detail: "\(local) → \(manifest.version)",
+            remote: manifest.version
+        )
+        await FleetAck.record(
+            action: "auto_update",
+            result: "installed",
+            detail: "\(local)->\(manifest.version)"
+        )
         return true
     }
 
@@ -82,9 +106,12 @@ struct AutoUpdateService: Service {
         }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 15
+        request.timeoutInterval = 20
         request.setValue("heald/\(HealdApp.version)", forHTTPHeaderField: "User-Agent")
         request.cachePolicy = .reloadIgnoringLocalCacheData
+        if let token = DeviceIdentity.bearerToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
@@ -99,14 +126,26 @@ struct AutoUpdateService: Service {
         return decoded
     }
 
-    // MARK: - Paths / config
+    // MARK: - Config
+
+    static func isAutoUpdateAllowed(policy: PolicyPack) -> Bool {
+        if ProcessInfo.processInfo.environment["HEALD_AUTO_UPDATE"] == "0" { return false }
+        return policy.autoUpdateEnabled ?? true
+    }
+
+    static func pollIntervalSec() -> Int {
+        if let s = ProcessInfo.processInfo.environment["HEALD_UPDATE_INTERVAL_SEC"],
+           let n = Int(s), n >= 60 {
+            return n
+        }
+        return defaultIntervalSec
+    }
 
     static func installBinaryURL() -> URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/heald/heald")
     }
 
-    /// Only self-update when we are the managed install path (not brew cellar / build dir).
     static func isManagedInstall() -> Bool {
         let install = installBinaryURL().resolvingSymlinksInPath().path
         guard let exe = resolvedExecutablePath() else { return false }
@@ -114,7 +153,6 @@ struct AutoUpdateService: Service {
     }
 
     static func resolvedExecutablePath() -> String? {
-        // Prefer argv0 (launchd / CLI); resolve symlinks (e.g. /opt/homebrew/bin/heald → Library/heald).
         if let argv0 = CommandLine.arguments.first {
             let path = URL(fileURLWithPath: argv0).resolvingSymlinksInPath().path
             if FileManager.default.isExecutableFile(atPath: path) { return path }
@@ -136,6 +174,19 @@ struct AutoUpdateService: Service {
         return "https://heald.sh/api/update"
     }
 
+    static func statusURL() -> URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".heald/data/auto_update.json")
+    }
+
+    static func readStatus() -> [String: Any]? {
+        guard let data = try? Data(contentsOf: statusURL()),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return obj
+    }
+
     // MARK: - Download / verify / replace
 
     private static func download(from url: URL, to dest: URL) async throws {
@@ -148,15 +199,8 @@ struct AutoUpdateService: Service {
             throw UpdateError.downloadHTTP(code)
         }
 
-        // Ensure parent exists
-        try fm.createDirectory(
-            at: dest.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-
-        if fm.fileExists(atPath: dest.path) {
-            try fm.removeItem(at: dest)
-        }
+        try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
         try fm.moveItem(at: tempFile, to: dest)
     }
 
@@ -166,18 +210,15 @@ struct AutoUpdateService: Service {
             throw UpdateError.binaryTooSmall(data.count)
         }
 
-        // Mach-O magic (MH_MAGIC_64 / fat)
         let magic = data.prefix(4)
         let isMachO =
-            magic == Data([0xCF, 0xFA, 0xED, 0xFE]) || // MH_MAGIC_64 LE
-            magic == Data([0xCE, 0xFA, 0xED, 0xFE]) || // MH_MAGIC LE
-            magic == Data([0xCA, 0xFE, 0xBA, 0xBE]) || // FAT
-            magic == Data([0xBE, 0xBA, 0xFE, 0xCA]) || // FAT swapped
-            magic == Data([0xFE, 0xED, 0xFA, 0xCF]) || // MH_MAGIC_64 BE
-            magic == Data([0xFE, 0xED, 0xFA, 0xCE])    // MH_MAGIC BE
-        guard isMachO else {
-            throw UpdateError.notMachO
-        }
+            magic == Data([0xCF, 0xFA, 0xED, 0xFE]) ||
+            magic == Data([0xCE, 0xFA, 0xED, 0xFE]) ||
+            magic == Data([0xCA, 0xFE, 0xBA, 0xBE]) ||
+            magic == Data([0xBE, 0xBA, 0xFE, 0xCA]) ||
+            magic == Data([0xFE, 0xED, 0xFA, 0xCF]) ||
+            magic == Data([0xFE, 0xED, 0xFA, 0xCE])
+        guard isMachO else { throw UpdateError.notMachO }
 
         if let expected = expectedSHA256?.trimmingCharacters(in: .whitespacesAndNewlines),
            !expected.isEmpty {
@@ -193,11 +234,8 @@ struct AutoUpdateService: Service {
 
     private static func replaceBinary(install: URL, temp: URL, backup: URL) throws {
         let fm = FileManager.default
-
-        // Executable bits
         try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: temp.path)
 
-        // Atomic-ish swap: backup current → move new into place
         if fm.fileExists(atPath: install.path) {
             try? fm.removeItem(at: backup)
             try fm.moveItem(at: install, to: backup)
@@ -206,17 +244,23 @@ struct AutoUpdateService: Service {
         do {
             try fm.moveItem(at: temp, to: install)
         } catch {
-            // Roll back
             if fm.fileExists(atPath: backup.path) {
                 try? fm.moveItem(at: backup, to: install)
             }
             throw error
         }
-
         try? fm.removeItem(at: backup)
     }
 
-    /// Semantic-ish version compare (numeric components only).
+    private static func refreshHomebrewSymlinkIfNeeded(install: URL) {
+        let link = URL(fileURLWithPath: "/opt/homebrew/bin/heald")
+        let fm = FileManager.default
+        // Only touch if link exists or parent is writable
+        guard fm.fileExists(atPath: "/opt/homebrew/bin") else { return }
+        try? fm.removeItem(at: link)
+        try? fm.createSymbolicLink(at: link, withDestinationURL: install)
+    }
+
     static func isNewer(_ remote: String, than local: String) -> Bool {
         let r = remote.split(separator: ".").map { Int($0) ?? 0 }
         let l = local.split(separator: ".").map { Int($0) ?? 0 }
@@ -228,6 +272,28 @@ struct AutoUpdateService: Service {
         }
         return false
     }
+
+    private func writeStatus(state: String, detail: String, remote: String? = nil) {
+        Self.writeStatus(state: state, detail: detail, remote: remote)
+    }
+
+    private static func writeStatus(state: String, detail: String, remote: String? = nil) {
+        let dir = statusURL().deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var dict: [String: Any] = [
+            "schema": "heald.auto_update/v1",
+            "ts": ISO8601DateFormatter().string(from: Date()),
+            "localVersion": HealdApp.version,
+            "state": state,
+            "detail": detail,
+            "manifestURL": updateManifestURL(),
+            "intervalSec": pollIntervalSec(),
+        ]
+        if let remote { dict["remoteVersion"] = remote }
+        if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: statusURL(), options: .atomic)
+        }
+    }
 }
 
 // MARK: - Types
@@ -238,23 +304,20 @@ struct UpdateManifest: Decodable, Sendable {
     let sha256: String?
     let minMacOS: String?
     let notes: String?
+    let channel: String?
 
     enum CodingKeys: String, CodingKey {
-        case version, url, sha256, minMacOS, notes
+        case version, url, sha256, minMacOS, notes, channel
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         version = try c.decode(String.self, forKey: .version)
         url = try c.decode(String.self, forKey: .url)
-        // API may send null
-        if let s = try c.decodeIfPresent(String.self, forKey: .sha256) {
-            sha256 = s
-        } else {
-            sha256 = nil
-        }
+        sha256 = try c.decodeIfPresent(String.self, forKey: .sha256)
         minMacOS = try c.decodeIfPresent(String.self, forKey: .minMacOS)
         notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        channel = try c.decodeIfPresent(String.self, forKey: .channel)
     }
 }
 

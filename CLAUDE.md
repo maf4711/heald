@@ -1,6 +1,6 @@
 # heald — Enterprise self-healing macOS daemon
 
-**Edition:** Enterprise 3.2 · **No Meister dependency** · Phase A bank pilot path
+**Edition:** Enterprise 3.5 · Auto-distribution (client pulls from /api/update)
 
 | Product | Role |
 |---------|------|
@@ -16,25 +16,28 @@ Plus: crash-loop quarantine, battery guardian, network DNS heal, optional safe s
 ## Policy / Bank pilot
 
 ```bash
-heald policy --preset bank    # consent=log, cloud off, no kill
-heald policy --consent log
-heald policy --cloud-off
-heald enroll                  # per-device token
-heald compliance              # v2 inventory + CIS subset
+heald policy --preset bank
+heald policy --auto-update-on     # fleet self-update (default ON)
+heald enroll
+heald update | update --check
+heald compliance
+./scripts/publish-client.sh       # ship binary + manifest to all clients
 ```
 
-`~/.heald/policy.json` · Device: `~/.heald/device.json`
+`~/.heald/policy.json` · Device: `~/.heald/device.json` · Docs: `docs/AUTO-UPDATE.md`
 
-Env: `HEALD_CLOUD=0` · `HEALD_DEVICE_TOKEN` · `HEALD_SIEM_HOST` · `HEALD_API_KEY` (lab)
+Env: `HEALD_AUTO_UPDATE=1` · `HEALD_UPDATE_INTERVAL_SEC=1800` · `HEALD_CLOUD=0` · `HEALD_DEVICE_TOKEN`
 
 ## Build / install
 
 ```bash
 swift build -c release
+# Bank pilot (recommended):
+./scripts/install-bank.sh
+./scripts/smoke-test.sh
+# Lab:
 cp .build/release/heald ~/Library/heald/heald
 ln -sfn ~/Library/heald/heald /opt/homebrew/bin/heald
-launchctl kickstart -k "gui/$(id -u)/com.heald.daemon"
-heald doctor
 ```
 
 ## CLI
@@ -47,8 +50,7 @@ heald policy | enroll | compliance | sudo-setup | update
 
 ## Docs
 
-- `docs/ROADMAP-DEUTSCHE-BANK.md`
-- `docs/PHASE-A-SPRINT.md`
-- `docs/THREAT-MODEL.md`
-- `docs/BANK-ONEPAGER.md`
-- `docs/ENTERPRISE.md`
+- **`docs/ROADMAP.md`** — P0–P3 status (führend)
+- `docs/SMOKE-TEST.md` · `docs/P3-EXPAND.md` · `docs/PILOT.md`
+- `docs/ELON-CUT-BANK.md` · `docs/THREAT-MODEL.md` · `docs/BANK-ONEPAGER.md`
+- Scripts: `install-bank.sh` · `build-pkg.sh` · `smoke-test.sh` · `reviewer-pack.sh` · `trust-status.sh`
