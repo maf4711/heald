@@ -20,10 +20,14 @@ final class AppState {
     
     init() {
         let defaults = UserDefaults.standard
-        if defaults.string(forKey: apiKeyKey) == nil {
-            print("[AppState] Setze Default-API-Konfiguration.")
+        // Only seed default URL — never a key, and never mark configured without one.
+        if defaults.string(forKey: apiURLKey) == nil {
             defaults.set("https://heald.sh", forKey: apiURLKey)
-            defaults.set(true, forKey: configuredKey)
+        }
+        // Stale flag from older builds that auto-set configured without a key.
+        let key = defaults.string(forKey: apiKeyKey) ?? ""
+        if key.isEmpty, defaults.bool(forKey: configuredKey) {
+            defaults.set(false, forKey: configuredKey)
         }
     }
     
@@ -41,7 +45,8 @@ final class AppState {
     }
 
     var isConfigured: Bool {
-        UserDefaults.standard.bool(forKey: configuredKey)
+        let key = UserDefaults.standard.string(forKey: apiKeyKey) ?? ""
+        return UserDefaults.standard.bool(forKey: configuredKey) && !key.isEmpty
     }
 
     func markConfigured() {
