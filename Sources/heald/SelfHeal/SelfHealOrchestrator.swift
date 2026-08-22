@@ -35,7 +35,7 @@ struct SelfHealOrchestrator: Service {
         _ = PolicyPack.load() // ensure default policy exists
         let state = HealCooldownState()
 
-        try await Task.sleep(for: .seconds(20))
+        try await Task.sleep(for: .seconds(180))
         let policy0 = await PolicyStore.shared.current()
         if policy0.selfHealEnabled {
             await fire(state: state, key: "proactive_heal", reason: "boot hygiene", policy: policy0) {

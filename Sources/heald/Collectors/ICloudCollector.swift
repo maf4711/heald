@@ -1,4 +1,5 @@
 import Foundation
+import HealdCore
 import ServiceLifecycle
 import OSLog
 
@@ -9,20 +10,36 @@ struct ICloudCollector: Service {
     let store: MetricsStore
     let activityLog: ActivityLog
 
-    private static let interval: Duration = .seconds(60)   // 1 min — fast enough for dashboard
+    private static let interval: Duration = .seconds(900)
+    private static let bootSettle: TimeInterval = 180
+    private static let sizeTTL: TimeInterval = 1800
     static let healBatchSize = 50
 
     func run() async throws {
+        var sizeCache = DirectorySizeCache(ttl: Self.sizeTTL)
+        var lastHeal: Date?
         try await withGracefulShutdownHandler {
             while true {
-                let snapshot = collectICloud()
+                let uptime = ProcessInfo.processInfo.systemUptime
+                if !BootStampede.settled(uptime: uptime, minimum: Self.bootSettle) {
+                    try await Task.sleep(for: .seconds(30))
+                    continue
+                }
+                let snapshot = collectICloud(sizeCache: &sizeCache)
                 await store.updateICloud(snapshot)
 
                 Logger.collector.info("iCloud: \(snapshot.localFiles) local, \(snapshot.cloudFiles) cloud, \(Int(snapshot.syncPercent))% sync, \(snapshot.evictedDirs.count) evicted, \(snapshot.conflicts) conflicts")
 
-                // Self-heal: download cloud placeholders
-                if snapshot.cloudFiles > 0 {
-                    await healCloudFiles(snapshot: snapshot)
+                // Never brctl-download Optimize Storage placeholders. That
+                // wakes FPCKService and fights the user's iCloud setting.
+                let now = Date()
+                if ICloudHealPolicy.shouldDownloadPlaceholders(
+                    evictedDirCount: snapshot.evictedDirs.count,
+                    lastHeal: lastHeal,
+                    now: now
+                ) {
+                    await healEvictedDirs(snapshot: snapshot)
+                    lastHeal = now
                 }
 
                 // Alert on low sync or evicted dirs
@@ -52,7 +69,7 @@ struct ICloudCollector: Service {
 
 // MARK: - Collection
 
-private func collectICloud() -> ICloudSnapshot {
+private func collectICloud(sizeCache: inout DirectorySizeCache) -> ICloudSnapshot {
     let fm = FileManager.default
     let docsURL = fm.homeDirectoryForCurrentUser.appendingPathComponent("Documents")
 
@@ -133,8 +150,9 @@ private func collectICloud() -> ICloudSnapshot {
     let totalFiles = localFiles + cloudFiles
     let syncPercent = totalFiles > 0 ? Double(localFiles) * 100.0 / Double(totalFiles) : 100.0
 
-    // Docs size + disk free
-    let docsSize = directorySize(docsURL)
+    // Docs size + disk free. Full `du -sk ~/Documents` is a boot stampede;
+    // cache 30 min and cap runtime so a huge tree cannot pin a core.
+    let docsSize = directorySize(docsURL, cache: &sizeCache)
     let diskFree = diskFreeBytes()
 
     // Bird daemon
@@ -174,12 +192,18 @@ private func isProcessRunning(_ name: String) -> Bool {
     return result.succeeded
 }
 
-private func directorySize(_ url: URL) -> Int64 {
-    let result = ShellRunner.run("/usr/bin/du", arguments: ["-sk", url.path])
-    guard result.succeeded else { return 0 }
-    let parts = result.output.split(separator: "\t")
-    guard let kb = Int64(parts.first ?? "0") else { return 0 }
-    return kb * 1024
+private func directorySize(_ url: URL, cache: inout DirectorySizeCache) -> Int64 {
+    cache.bytes(at: url) { url in
+        let result = ShellRunner.run(
+            "/usr/bin/du",
+            arguments: ["-sk", url.path],
+            timeoutSeconds: 8
+        )
+        guard result.succeeded else { return 0 }
+        let parts = result.output.split(separator: "\t")
+        guard let kb = Int64(parts.first ?? "0") else { return 0 }
+        return kb * 1024
+    }
 }
 
 private func diskFreeBytes() -> Int64 {
@@ -200,35 +224,15 @@ private func shouldExclude(_ name: String) -> Bool {
 
 // MARK: - Self-Healing
 
-private func healCloudFiles(snapshot: ICloudSnapshot) async {
+private func healEvictedDirs(snapshot: ICloudSnapshot) async {
     let fm = FileManager.default
     let docsURL = fm.homeDirectoryForCurrentUser.appendingPathComponent("Documents")
 
-    // Download evicted top-level dirs
     for dir in snapshot.evictedDirs {
         let placeholder = docsURL.appendingPathComponent(".\(dir).icloud")
         if fm.fileExists(atPath: placeholder.path) {
-            _ = ShellRunner.run("/usr/bin/brctl", arguments: ["download", placeholder.path])
+            _ = ShellRunner.run("/usr/bin/brctl", arguments: ["download", placeholder.path], timeoutSeconds: 8)
             Logger.collector.info("iCloud heal: downloading evicted dir '\(dir)'")
         }
-    }
-
-    // Download cloud file placeholders (batched) via find + brctl
-    let findResult = ShellRunner.run("/usr/bin/find", arguments: [
-        docsURL.path, "-maxdepth", "3", "-name", ".*.icloud", "-print"
-    ])
-    guard findResult.succeeded else { return }
-
-    var downloaded = 0
-    for line in findResult.output.split(separator: "\n") {
-        guard downloaded < ICloudCollector.healBatchSize else { break }
-        let path = String(line)
-        guard !path.isEmpty else { continue }
-        _ = ShellRunner.run("/usr/bin/brctl", arguments: ["download", path])
-        downloaded += 1
-    }
-
-    if downloaded > 0 {
-        Logger.collector.info("iCloud heal: triggered download for \(downloaded) cloud files")
     }
 }

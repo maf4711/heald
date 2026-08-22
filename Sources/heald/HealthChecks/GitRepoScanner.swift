@@ -74,7 +74,7 @@ struct GitRepoScanner {
                 "-not", "-path", "*/node_modules/*",
                 "-not", "-path", "*/.Trash/*",
                 "-not", "-path", "*/Backups/*",
-            ])
+            ], timeoutSeconds: 20)
 
             if result.succeeded {
                 for line in result.output.split(separator: "\n") {

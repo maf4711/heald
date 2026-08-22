@@ -73,7 +73,7 @@ struct ICloudGhostCleaner {
             let result = ShellRunner.run("/usr/bin/find", arguments: [
                 scanPath, "-maxdepth", "3",
                 "-type", "f", "-links", "65535", "-empty"
-            ])
+            ], timeoutSeconds: 8)
 
             if result.succeeded {
                 let stubs = result.output.split(separator: "\n").filter { !$0.isEmpty }

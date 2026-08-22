@@ -90,6 +90,9 @@ if $NEED_DOWNLOAD; then
     ok "installed ($(du -h "$BINARY" | cut -f1)${REMOTE_VERSION:+ v$REMOTE_VERSION})"
 fi
 chmod 755 "$BINARY"
+# Copied Swift binaries keep a linker signature that syspolicyd/BlockBlock
+# SIGKILL. Re-sign ad-hoc so launchd can actually start the daemon.
+codesign --force --sign - "$BINARY" >/dev/null 2>&1 || true
 
 # Verify it's a real binary (not an HTML error page)
 if ! file "$BINARY" | grep -q "Mach-O"; then

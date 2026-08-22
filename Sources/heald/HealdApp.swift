@@ -29,7 +29,7 @@ enum HealdMain {
 }
 
 struct HealdApp: AsyncParsableCommand {
-    static let version = "3.5.0"
+    static let version = "3.5.1"
 
     static let configuration = CommandConfiguration(
         commandName: "heald",

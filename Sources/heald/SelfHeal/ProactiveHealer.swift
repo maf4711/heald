@@ -12,10 +12,9 @@ struct ProactiveHealer: Sendable {
             "/usr/local/bin",
         ])
         await AutofixEngine().quarantineOrphanAgents(activityLog: activityLog)
+        // Desktop only — Documents/Developer full-tree finds at login starve Spotlight.
         fixes += cleanDSStore(in: [
             "\(NSHomeDirectory())/Desktop",
-            "\(NSHomeDirectory())/Documents",
-            "\(NSHomeDirectory())/Developer",
         ])
 
         if fixes > 0 {
@@ -61,8 +60,8 @@ struct ProactiveHealer: Sendable {
         for dir in dirs {
             guard FileManager.default.fileExists(atPath: dir) else { continue }
             let r = ShellRunner.run("/usr/bin/find", arguments: [
-                dir, "-name", ".DS_Store", "-type", "f",
-            ])
+                dir, "-maxdepth", "2", "-name", ".DS_Store", "-type", "f",
+            ], timeoutSeconds: 8)
             for line in r.output.split(separator: "\n") {
                 let p = String(line)
                 guard !p.isEmpty else { continue }
