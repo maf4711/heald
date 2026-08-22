@@ -11,7 +11,7 @@ struct AutofixEngine: Sendable {
             return
         }
         // Non-interactive; succeeds if already authorized or SIP policy allows
-        let r = ShellRunner.run(fw, arguments: ["--setglobalstate", "on"])
+        let r = ShellRunner.run(fw, arguments: ["--setglobalstate", "on"], timeoutSeconds: 8)
         let summary = r.succeeded
             ? "Firewall enabled (or already on)"
             : "Firewall enable failed (needs admin): \(r.errorOutput.prefix(120))"
@@ -25,7 +25,7 @@ struct AutofixEngine: Sendable {
     /// Light brew hygiene: cleanup old downloads (no full upgrade — too heavy for hot path).
     func brewCleanupLight(activityLog: ActivityLog) async {
         guard let brew = ShellRunner.findExecutable("brew") else { return }
-        let r = ShellRunner.run(brew, arguments: ["cleanup", "-s", "--prune=all"])
+        let r = ShellRunner.run(brew, arguments: ["cleanup", "-s", "--prune=all"], timeoutSeconds: 60)
         try? await activityLog.log(event: ActivityEvent(
             type: .brewUpgrade,
             summary: r.succeeded ? "brew cleanup light OK" : "brew cleanup failed",
@@ -47,7 +47,7 @@ struct AutofixEngine: Sendable {
             guard let bin, !bin.isEmpty, !FileManager.default.fileExists(atPath: bin) else { continue }
 
             let label = plist.deletingPathExtension().lastPathComponent
-            _ = ShellRunner.run("/bin/launchctl", arguments: ["unload", plist.path])
+            _ = ShellRunner.run("/bin/launchctl", arguments: ["unload", plist.path], timeoutSeconds: 5)
             let dest = plist.appendingPathExtension("disabled.\(Int(Date().timeIntervalSince1970))")
             do {
                 try FileManager.default.moveItem(at: plist, to: dest)
@@ -68,14 +68,14 @@ struct AutofixEngine: Sendable {
     private func programPath(from plist: URL) -> String? {
         let r = ShellRunner.run("/usr/bin/plutil", arguments: [
             "-extract", "ProgramArguments.0", "raw", "-o", "-", plist.path,
-        ])
+        ], timeoutSeconds: 5)
         if r.succeeded {
             let s = r.output.trimmingCharacters(in: .whitespacesAndNewlines)
             if !s.isEmpty { return s }
         }
         let r2 = ShellRunner.run("/usr/bin/plutil", arguments: [
             "-extract", "Program", "raw", "-o", "-", plist.path,
-        ])
+        ], timeoutSeconds: 5)
         if r2.succeeded {
             return r2.output.trimmingCharacters(in: .whitespacesAndNewlines)
         }

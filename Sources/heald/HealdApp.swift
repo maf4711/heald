@@ -29,7 +29,7 @@ enum HealdMain {
 }
 
 struct HealdApp: AsyncParsableCommand {
-    static let version = "3.5.1"
+    static let version = "3.5.2"
 
     static let configuration = CommandConfiguration(
         commandName: "heald",
@@ -285,12 +285,22 @@ struct MaintainCommand: AsyncParsableCommand {
 struct HealCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "heal",
-        abstract: "Proactive healer now"
+        abstract: "Proactive healer + performance autoheal now"
     )
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
         print("heald heal...")
-        await ProactiveHealer().run(activityLog: try openActivityLog())
+        let log = try openActivityLog()
+        let perf = await PerformanceHealer().run(activityLog: log, cpuOverall: 1, force: true)
+        if perf.didWork {
+            print("perf autoheal: spotlight=\(perf.spotlightExcluded.count) runAtLoad=\(perf.runAtLoadStripped.count) debugLogin=\(perf.debugLoginItemsRemoved.count) du=\(perf.runawayDuKilled.count)")
+            for p in perf.spotlightExcluded { print("  spotlight exclude: \(p)") }
+            for a in perf.runAtLoadStripped { print("  RunAtLoad off: \(a)") }
+            for n in perf.debugLoginItemsRemoved { print("  login item removed: \(n)") }
+        } else {
+            print("perf autoheal: nothing left to fix")
+        }
+        await ProactiveHealer().run(activityLog: log)
         print("done")
     }
 }

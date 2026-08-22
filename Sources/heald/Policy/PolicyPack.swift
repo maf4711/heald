@@ -49,6 +49,8 @@ struct PolicyPack: Codable, Sendable {
     var preferDeviceToken: Bool = true
     /// When true/nil, daemon polls /api/update (unless HEALD_AUTO_UPDATE=0). Optional for old policy.json.
     var autoUpdateEnabled: Bool? = true
+    /// When true/nil, detect high load and apply boot-stampede heals.
+    var performanceAutohealEnabled: Bool? = true
 
     // Thresholds
     var diskFreePctCritical: Double = 8

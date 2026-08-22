@@ -11,6 +11,8 @@
 
 `SelfHealOrchestrator` every ~45s: detect → remediate (if consent=auto) → log → notify → fleet ACK.
 
+Performance autoheal (when load/CPU is high or at boot settle): Spotlight-exclude heavy trees (`~/Library/Developer`, …), strip `RunAtLoad` from interval LaunchAgents, drop Debug login items, SIGTERM runaway `du ~/Documents`. `heald heal` runs the same. Toggle: `performanceAutohealEnabled` in `~/.heald/policy.json`.
+
 Plus: crash-loop quarantine, battery guardian, network DNS heal, optional safe softwareupdate, Slack webhooks, SIEM syslog, PII redaction.
 
 ## Policy / Bank pilot
