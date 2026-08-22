@@ -17,11 +17,11 @@ export type ClientRelease = {
 };
 
 const defaults: ClientRelease = {
-  version: "3.5.0",
-  url: "https://github.com/maf4711/heald/releases/latest/download/heald",
-  sha256: "4382e718380e390909d3ed1b0953d40087da34989d9a4bf0c42ff7528c05a13a",
+  version: "3.5.2",
+  url: "https://github.com/maf4711/heald/releases/download/v3.5.2/heald",
+  sha256: "752ae3ec53f24976d40b5122d0f5d465169c64189298e34d779d43d1498d4f3b",
   minMacOS: "26.0",
-  notes: "heald 3.5.0 — auto-distribution enabled (poll /api/update)",
+  notes: "heald 3.5.2 — fleet auto-update",
 };
 
 export function getClientRelease(): ClientRelease {
