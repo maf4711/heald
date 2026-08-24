@@ -6,7 +6,7 @@ struct HealdService: Service {
     let store: MetricsStore
 
     func run() async throws {
-        Logger.lifecycle.info("HealdService running — enterprise self-heal (no Meister dependency)")
+        Logger.lifecycle.info("HealdService running — enterprise self-heal (optional MeisterSiri daily)")
 
         let dataDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".heald/data")

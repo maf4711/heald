@@ -5,7 +5,7 @@
 | Product | Role |
 |---------|------|
 | **heald** | Always-on self-heal, policy, compliance, fleet |
-| **Meister / meisterSiri** | Private personal CLI only |
+| **Meister / meisterSiri** | Optional daily batch via `heald meister` / 09:15 bridge (skip if missing) |
 
 ## Self-heal
 
