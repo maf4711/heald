@@ -9,6 +9,7 @@ settings:
   base:
     SWIFT_VERSION: "5.9"
     DEVELOPMENT_TEAM: K63X3ZTV3Q
+    CURRENT_PROJECT_VERSION: "4"
 targets:
   HealdMac:
     type: application
@@ -17,7 +18,7 @@ targets:
       - HealdMac
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.heald.mac
+        PRODUCT_BUNDLE_IDENTIFIER: com.merados.heald.app
         INFOPLIST_KEY_LSUIElement: true
         ASSETCATALOG_COMPILER_APPICON_NAME: "AppIcon"
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: "AccentColor"
@@ -30,6 +31,7 @@ targets:
       path: HealdMac/Info.plist
       properties:
         LSUIElement: true
+        LSApplicationCategoryType: public.app-category.healthcare-fitness
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
     entitlements:

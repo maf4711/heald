@@ -32,6 +32,8 @@ struct PerformanceAutohealTests {
     @Test func neverStripsProtectedAgentLabels() {
         #expect(PerformanceAutoheal.isProtectedAgentLabel("com.heald.daemon") == true)
         #expect(PerformanceAutoheal.isProtectedAgentLabel("ai.openclaw.gateway") == true)
+        #expect(PerformanceAutoheal.isProtectedAgentLabel("com.a321.cpu-guard") == true)
+        #expect(PerformanceAutoheal.isProtectedAgentLabel("com.a321.sim-guard") == true)
         #expect(PerformanceAutoheal.isProtectedAgentLabel("com.merados.apple-mail-auto") == false)
         #expect(PerformanceAutoheal.isProtectedAgentLabel("com.merados.devsync") == false)
     }

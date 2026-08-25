@@ -15,12 +15,14 @@ struct PerformanceHealer: Sendable {
         var runAtLoadStripped: [String] = []
         var debugLoginItemsRemoved: [String] = []
         var runawayDuKilled: [Int32] = []
+        var cpuStormKilled: [(Int32, String)] = []
 
         var didWork: Bool {
             !spotlightExcluded.isEmpty
                 || !runAtLoadStripped.isEmpty
                 || !debugLoginItemsRemoved.isEmpty
                 || !runawayDuKilled.isEmpty
+                || !cpuStormKilled.isEmpty
         }
     }
 
@@ -37,13 +39,14 @@ struct PerformanceHealer: Sendable {
         }
 
         var report = Report()
+        report.cpuStormKilled = healCpuStormSync()
         report.spotlightExcluded = excludeSpotlightHeavyDirs()
         report.runAtLoadStripped = stripIntervalRunAtLoad()
         report.debugLoginItemsRemoved = removeDebugLoginItems()
         report.runawayDuKilled = killRunawayDocumentsDu()
 
         if report.didWork {
-            let summary = "perf autoheal load=\(String(format: "%.1f", load1))/\(ncpu) spotlight=\(report.spotlightExcluded.count) runAtLoad=\(report.runAtLoadStripped.count) debugLogin=\(report.debugLoginItemsRemoved.count) du=\(report.runawayDuKilled.count)"
+            let summary = "perf autoheal load=\(String(format: "%.1f", load1))/\(ncpu) spotlight=\(report.spotlightExcluded.count) runAtLoad=\(report.runAtLoadStripped.count) debugLogin=\(report.debugLoginItemsRemoved.count) du=\(report.runawayDuKilled.count) cpuStorm=\(report.cpuStormKilled.count)"
             try? await activityLog.log(event: ActivityEvent(
                 type: .selfHealed,
                 summary: summary,
@@ -61,6 +64,89 @@ struct PerformanceHealer: Sendable {
         let n = getloadavg(&loads, 3)
         guard n > 0 else { return 0 }
         return loads[0]
+    }
+
+    /// Always-on CPU storm heal (HUD dupes / leaked it2). Runs even when
+    /// load is not fully degraded and even when bank consent=log.
+    func healCpuStorm(activityLog: ActivityLog) async -> [(Int32, String)] {
+        let killed = healCpuStormSync()
+        if !killed.isEmpty {
+            let detail = killed.map { "\($0.1):\($0.0)" }.joined(separator: ",")
+            try? await activityLog.log(event: ActivityEvent(
+                type: .selfHealed,
+                summary: "cpu storm heal \(detail)",
+                detail: detail
+            ))
+        }
+        return killed
+    }
+
+    private func healCpuStormSync() -> [(Int32, String)] {
+        let load1 = Self.loadAverage1()
+        writePressure(load1 >= CpuStorm.pressureLoad)
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let holdURL = home.appendingPathComponent(".cache/cpu-guard.hold")
+        let holdMtime = (try? holdURL.resourceValues(forKeys: [.contentModificationDateKey])
+            .contentModificationDate)
+        let hold = CpuStorm.holdActive(now: Date(), holdMtime: holdMtime)
+        let hudPid = readHudPidfile()
+        let procs = listStormProcs()
+        let planned = CpuStorm.plan(procs: procs, hold: hold, hudPidfile: hudPid)
+        var killed: [(Int32, String)] = []
+        for (pid, reason) in planned {
+            guard pid != getpid(), pid != getppid() else { continue }
+            kill(pid, SIGTERM)
+            usleep(150_000)
+            if kill(pid, 0) == 0 {
+                kill(pid, SIGKILL)
+            }
+            killed.append((pid, reason))
+            Logger.healer.warning("cpu storm: kill pid=\(pid) reason=\(reason, privacy: .public)")
+        }
+        return killed
+    }
+
+    private func writePressure(_ on: Bool) {
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".cache/cpu-guard.pressure")
+        if on {
+            try? FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try? "load1=\(Self.loadAverage1())\n".write(to: url, atomically: true, encoding: .utf8)
+        } else if FileManager.default.fileExists(atPath: url.path) {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private func readHudPidfile() -> Int32? {
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".cache/claude/statusline-daemon.pid")
+        guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        return Int32(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private func listStormProcs() -> [CpuStorm.Proc] {
+        var env = ProcessInfo.processInfo.environment
+        env["LC_ALL"] = "C"
+        let ps = ShellRunner.run(
+            "/bin/ps",
+            arguments: ["-axo", "pid=,etime=,command="],
+            environment: env,
+            timeoutSeconds: 8
+        )
+        guard ps.succeeded else { return [] }
+        var out: [CpuStorm.Proc] = []
+        for line in ps.output.split(separator: "\n") {
+            let raw = line.trimmingCharacters(in: .whitespaces)
+            let parts = raw.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
+            guard parts.count >= 3, let pid = Int32(parts[0]) else { continue }
+            let etime = CpuStorm.parseEtime(String(parts[1]))
+            let args = String(parts[2])
+            out.append(CpuStorm.Proc(pid: pid, etime: etime, args: args, kind: CpuStorm.classify(args)))
+        }
+        return out
     }
 
     // MARK: - Spotlight

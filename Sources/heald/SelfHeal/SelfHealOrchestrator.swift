@@ -71,6 +71,11 @@ struct SelfHealOrchestrator: Service {
             return
         }
 
+        // CPU storm (HUD dupes / leaked it2) every tick — not gated by consent=log.
+        if policy.allowsPerformanceRemediation() {
+            _ = await self.perf.healCpuStorm(activityLog: self.activityLog)
+        }
+
         let ram = await store.ram
         let disk = await store.disk
         let thermal = await store.thermal

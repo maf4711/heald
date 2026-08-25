@@ -29,7 +29,7 @@ enum HealdMain {
 }
 
 struct HealdApp: AsyncParsableCommand {
-    static let version = "3.5.2"
+    static let version = "3.5.3"
 
     static let configuration = CommandConfiguration(
         commandName: "heald",
@@ -291,9 +291,14 @@ struct HealCommand: AsyncParsableCommand {
         setvbuf(stdout, nil, _IOLBF, 0)
         print("heald heal...")
         let log = try openActivityLog()
-        let perf = await PerformanceHealer().run(activityLog: log, cpuOverall: 1, force: true)
+        let healer = PerformanceHealer()
+        let storm = await healer.healCpuStorm(activityLog: log)
+        if !storm.isEmpty {
+            print("cpu storm: " + storm.map { "\($0.1):\($0.0)" }.joined(separator: ","))
+        }
+        let perf = await healer.run(activityLog: log, cpuOverall: 1, force: true)
         if perf.didWork {
-            print("perf autoheal: spotlight=\(perf.spotlightExcluded.count) runAtLoad=\(perf.runAtLoadStripped.count) debugLogin=\(perf.debugLoginItemsRemoved.count) du=\(perf.runawayDuKilled.count)")
+            print("perf autoheal: spotlight=\(perf.spotlightExcluded.count) runAtLoad=\(perf.runAtLoadStripped.count) debugLogin=\(perf.debugLoginItemsRemoved.count) du=\(perf.runawayDuKilled.count) cpuStorm=\(perf.cpuStormKilled.count)")
             for p in perf.spotlightExcluded { print("  spotlight exclude: \(p)") }
             for a in perf.runAtLoadStripped { print("  RunAtLoad off: \(a)") }
             for n in perf.debugLoginItemsRemoved { print("  login item removed: \(n)") }

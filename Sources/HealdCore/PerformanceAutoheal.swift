@@ -39,7 +39,7 @@ public enum PerformanceAutoheal: Sendable {
         let l = label.lowercased()
         let prefixes = [
             "com.heald", "ai.openclaw", "ai.fbrk", "com.maccluster",
-            "homebrew.mxcl", "com.meister",
+            "homebrew.mxcl", "com.meister", "com.a321",
         ]
         return prefixes.contains { l.hasPrefix($0) }
     }

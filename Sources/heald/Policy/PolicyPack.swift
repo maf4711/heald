@@ -216,6 +216,14 @@ struct PolicyPack: Codable, Sendable {
         }
     }
 
+    /// CPU / boot-stampede heals stay on even when bank consent=log.
+    /// Toggle off with `performanceAutohealEnabled: false`.
+    func allowsPerformanceRemediation() -> Bool {
+        guard selfHealEnabled else { return false }
+        if performanceAutohealEnabled == false { return false }
+        return true
+    }
+
     func allowsLog() -> Bool { true }
 
     /// Cloud push allowed (policy ∧ env).
