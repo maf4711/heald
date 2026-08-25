@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import HealdCore
 import ServiceLifecycle
 import OSLog
 
@@ -33,7 +34,7 @@ struct HealdApp: AsyncParsableCommand {
 
     static let configuration = CommandConfiguration(
         commandName: "heald",
-        abstract: "heald Enterprise — self-healing macOS (native, no Meister)",
+        abstract: "heald Enterprise — self-healing macOS (native; optional MeisterSiri daily)",
         version: version,
         subcommands: [
             RunCommand.self,
@@ -50,6 +51,7 @@ struct HealdApp: AsyncParsableCommand {
             ApproveCommand.self,
             SudoSetupCommand.self,
             UpdateCommand.self,
+            MeisterCommand.self,
             VersionCommand.self,
         ],
         defaultSubcommand: RunCommand.self
@@ -94,7 +96,17 @@ struct DoctorCommand: AsyncParsableCommand {
         print("heald doctor v\(HealdApp.version) — Enterprise")
         print(String(repeating: "─", count: 48))
         print("Edition:    enterprise (native self-heal)")
-        print("Meister:    not required / not linked")
+        let last = MeisterBridgeRunner.loadLast()
+        let bin = MeisterBridge.resolveBinary(preferred: MeisterBridgeRunner.preferredTwin() ?? last?.preferredTwin) {
+            FileManager.default.isExecutableFile(atPath: $0)
+        }
+        if let bin {
+            let ts = last?.ts ?? "no last.json"
+            let score = last?.score.map(String.init) ?? "-"
+            print("Meister:    \(bin)  last=\(ts) score=\(score)")
+        } else {
+            print("Meister:    not installed (native maintain only)")
+        }
         print("Preset:     \(policy.preset)")
         print("Consent:    \(policy.consent.rawValue)  selfHeal=\(policy.selfHealEnabled)")
         print("Cloud:      \(policy.allowsCloud() ? "enabled" : "DISABLED (policy/HEALD_CLOUD=0)")")
@@ -147,7 +159,7 @@ struct DoctorCommand: AsyncParsableCommand {
             print("Update last:\(state) \(detail)\(remote.map { " remote=\($0)" } ?? "")")
         }
         print("Features:   policy · mdm · enroll · approve · bank · pii · siem · compliance v2")
-        print("CLI:        policy | enroll | approve | compliance | maintain | heal | free | update")
+        print("CLI:        policy | enroll | approve | compliance | maintain | meister | heal | free | update")
         let sh = dataDir.appendingPathComponent("self_heal.json")
         if let data = try? Data(contentsOf: sh),
            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -158,6 +170,30 @@ struct DoctorCommand: AsyncParsableCommand {
             }
         }
         print(String(repeating: "─", count: 48))
+    }
+}
+
+// MARK: - MeisterSiri daily batch
+
+struct MeisterCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "meister",
+        abstract: "Run meisterSiri --auto -q if not already run today"
+    )
+
+    @Flag(name: .long, help: "Run even if last.json is from today")
+    var force: Bool = false
+
+    func run() async throws {
+        setvbuf(stdout, nil, _IOLBF, 0)
+        let o = MeisterBridgeRunner.tick(force: force)
+        print("heald meister  action=\(o.action)")
+        if let b = o.binary { print("binary:  \(b)") }
+        if let c = o.exitCode { print("exit:    \(c)") }
+        if let d = o.durationSec { print("seconds: \(d)") }
+        if let t = o.detail, !t.isEmpty { print("detail:  \(t)") }
+        if o.action == "failed" { throw ExitCode(1) }
+        if o.action == "skipped_no_binary" { throw ExitCode(2) }
     }
 }
 

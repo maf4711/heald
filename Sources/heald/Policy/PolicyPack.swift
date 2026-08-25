@@ -51,6 +51,8 @@ struct PolicyPack: Codable, Sendable {
     var autoUpdateEnabled: Bool? = true
     /// When true/nil, detect high load and apply boot-stampede heals.
     var performanceAutohealEnabled: Bool? = true
+    /// Optional daily meisterSiri --auto (skip if binary missing). Bank preset turns this off.
+    var meisterBridgeEnabled: Bool? = true
 
     // Thresholds
     var diskFreePctCritical: Double = 8
@@ -185,6 +187,7 @@ struct PolicyPack: Codable, Sendable {
         p.preferDeviceToken = true
         // Distribution still allowed; cloud metrics stay off
         p.autoUpdateEnabled = true // fleet distribution on; cloud metrics still off
+        p.meisterBridgeEnabled = false
         return p
     }
 
