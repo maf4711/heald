@@ -16,7 +16,7 @@ settings:
     INFOPLIST_KEY_CFBundleDisplayName: "Heald"
     INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.utilities"
     MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "3"
+    CURRENT_PROJECT_VERSION: "4"
     DEVELOPMENT_TEAM: K63X3ZTV3Q
 targets:
   Heald:
