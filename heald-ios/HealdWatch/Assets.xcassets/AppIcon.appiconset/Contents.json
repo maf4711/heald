@@ -83,12 +83,6 @@
       "scale": "1x",
       "size": "1024x1024",
       "filename": "icon-1024.png"
-    },
-    {
-      "filename": "icon-1024.png",
-      "idiom": "ios-marketing",
-      "scale": "1x",
-      "size": "1024x1024"
     }
   ],
   "info": {
