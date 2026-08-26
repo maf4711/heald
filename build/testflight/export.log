@@ -1,0 +1,59 @@
+2026-08-25 17:38:49.718 xcodebuild[14105:6578381] [MT] IDEDistribution: -[IDEDistributionLogging _createLoggingBundleAtPath:]: Created bundle at path "/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/Heald_2026-08-25_17-38-49.717.xcdistributionlogs".
+2026-08-25 17:39:01.271 xcodebuild[14105:6578381] Starting upload
+2026-08-25 17:39:03.594 xcodebuild[14105:6578383] Progress 0 %: Making copy of ‘Heald.ipa’…
+2026-08-25 17:39:03.594 xcodebuild[14105:6578383] Progress 0 %: Making copy of ‘Heald.ipa’…
+2026-08-25 17:39:03.596 xcodebuild[14105:6578383] Progress 0 %: Preparing to upload ‘Heald.ipa’…
+2026-08-25 17:39:11.627 xcodebuild[14105:6578383] Progress 0 %: Analyzing package…
+2026-08-25 17:39:12.896 xcodebuild[14105:6578383] Progress 0 %: Sending analysis to App Store Connect…
+2026-08-25 17:39:15.085 xcodebuild[14105:6578383] Progress 0 %: Waiting for App Store Connect analysis response…
+2026-08-25 17:39:16.720 xcodebuild[14105:6578383] Progress 0 %: Waiting for App Store Connect analysis response…
+2026-08-25 17:39:33.407 xcodebuild[14105:6578383] Progress 0 %: Sending SPI analysis to App Store Connect…
+2026-08-25 17:39:34.367 xcodebuild[14105:6578383] Progress 0 %: Waiting for App Store Connect SPI analysis response…
+2026-08-25 17:39:35.916 xcodebuild[14105:6578383] Progress 0 %: Waiting for App Store Connect SPI analysis response…
+2026-08-25 17:39:57.074 xcodebuild[14105:6578383] Progress 0 %: Upload failed.
+Missing Icons. No icons found for watch application 'Heald.app/Watch/HealdWatch.app'. Make sure that its Info.plist file includes entries for CFBundleIconFiles.
+The server’s response was: ‘{
+    code = 90391;
+    description = "Missing Icons. No icons found for watch application 'Heald.app/Watch/HealdWatch.app'. Make sure that its Info.plist file includes entries for CFBundleIconFiles.";
+}’.
+error: exportArchive Missing Icons. No icons found for watch application 'Heald.app/Watch/HealdWatch.app'. Make sure that its Info.plist file includes entries for CFBundleIconFiles. The server’s response was: ‘{
+    code = 90391;
+    description = "Missing Icons. No icons found for watch application 'Heald.app/Watch/HealdWatch.app'. Make sure that its Info.plist file includes entries for CFBundleIconFiles.";
+}’.
+
+error: exportArchive Missing architecture. The “Heald.app/Watch/HealdWatch.app” bundle is missing the [arm64_32] architecture(s). The arm64_32 architecture is required for watchOS apps and app extensions with a MinimumOSVersion less than 27.0. The arm64 architecture is required for all watchOS apps and app extensions. We recommend using the default Xcode build setting of “Standard Architectures” to build a binary with support for all required architectures. The server’s response was: ‘{
+    code = 90733;
+    description = "Missing architecture. The \U201cHeald.app/Watch/HealdWatch.app\U201d bundle is missing the [arm64_32] architecture(s). The arm64_32 architecture is required for watchOS apps and app extensions with a MinimumOSVersion less than 27.0. The arm64 architecture is required for all watchOS apps and app extensions. We recommend using the default Xcode build setting of \U201cStandard Architectures\U201d to build a binary with support for all required architectures.";
+}’.
+
+error: exportArchive Unsupported Key. The Info.plist of bundle Heald.app/Watch/HealdWatch.app may not contain the UIRequiredDeviceCapabilities key. The server’s response was: ‘{
+    code = 90595;
+    description = "Unsupported Key. The Info.plist of bundle Heald.app/Watch/HealdWatch.app may not contain the UIRequiredDeviceCapabilities key.";
+}’.
+
+error: exportArchive Invalid Info.plist value. The value of the MinimumOSVersion Info.plist key in the com.merados.heald.app.watchkitapp bundle, 17.0, is invalid. It must specify an operating system version of 26.0 or later, or a version earlier than 12.0. The server’s response was: ‘{
+    code = 91164;
+    description = "Invalid Info.plist value. The value of the MinimumOSVersion Info.plist key in the com.merados.heald.app.watchkitapp bundle, 17.0, is invalid. It must specify an operating system version of 26.0 or later, or a version earlier than 12.0.";
+}’.
+
+error: exportArchive Invalid UIDeviceFamily. The Info.plist of Apple Watch application 'Heald.app/Watch/HealdWatch.app' contains an invalid UIDeviceFamily value of '2'. The server’s response was: ‘{
+    code = 90524;
+    description = "Invalid UIDeviceFamily. The Info.plist of Apple Watch application 'Heald.app/Watch/HealdWatch.app' contains an invalid UIDeviceFamily value of '2'.";
+}’.
+
+error: exportArchive Invalid Info.plist value. The value for the key 'DTPlatformName' in bundle Heald.app/Watch/HealdWatch.app is invalid. The server’s response was: ‘{
+    code = 90508;
+    description = "Invalid Info.plist value. The value for the key 'DTPlatformName' in bundle Heald.app/Watch/HealdWatch.app is invalid.";
+}’.
+
+error: exportArchive Invalid UIDeviceFamily. The Info.plist of Apple Watch application 'Heald.app/Watch/HealdWatch.app' contains an invalid UIDeviceFamily value of '1'. The server’s response was: ‘{
+    code = 90524;
+    description = "Invalid UIDeviceFamily. The Info.plist of Apple Watch application 'Heald.app/Watch/HealdWatch.app' contains an invalid UIDeviceFamily value of '1'.";
+}’.
+
+** EXPORT FAILED **
+
+2026-08-25 17:39:57.620 xcodebuild[14453:6581793] [MT] IDEDistribution: -[IDEDistributionLogging _createLoggingBundleAtPath:]: Created bundle at path "/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/Heald_2026-08-25_17-39-57.620.xcdistributionlogs".
+Exported Heald to: /Users/a321/Developer/heald/build/testflight/ipa
+** EXPORT SUCCEEDED **
+
