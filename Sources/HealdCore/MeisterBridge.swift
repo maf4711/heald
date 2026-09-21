@@ -1,6 +1,6 @@
 import Foundation
 
-/// Handshake with Meister / meisterSiri (`~/.meister/last.json`).
+/// Handshake with Meister / MeisterAI (`~/.meister/last.json`).
 public struct MeisterLastRun: Codable, Sendable, Equatable {
     public var ts: String?
     public var score: Int?
@@ -30,8 +30,22 @@ public struct MeisterLastRun: Codable, Sendable, Equatable {
 
 /// When to invoke the batch-maintain CLI. heald stays optional: no binary → skip.
 public enum MeisterBridge: Sendable {
+    public static func canonicalTwin(_ name: String?) -> String? {
+        switch name {
+        case nil, "":
+            return nil
+        case "meisterSiri", "MeisterSiri":
+            return "MeisterAI"
+        default:
+            return name
+        }
+    }
+
     public static func parseLast(_ data: Data) throws -> MeisterLastRun {
-        try JSONDecoder().decode(MeisterLastRun.self, from: data)
+        var run = try JSONDecoder().decode(MeisterLastRun.self, from: data)
+        if let twin = canonicalTwin(run.twin) { run.twin = twin }
+        if let preferred = canonicalTwin(run.preferredTwin) { run.preferredTwin = preferred }
+        return run
     }
 
     public static func lastDate(_ run: MeisterLastRun) -> Date? {
@@ -59,11 +73,12 @@ public enum MeisterBridge: Sendable {
         preferred: String?,
         exists: (String) -> Bool
     ) -> String? {
+        let preferredName = canonicalTwin(preferred) ?? preferred
         let order: [String]
-        if preferred == "meister" {
-            order = ["meister", "meisterSiri"]
+        if preferredName == "meister" {
+            order = ["meister", "MeisterAI", "meisterSiri"]
         } else {
-            order = ["meisterSiri", "meister"]
+            order = ["MeisterAI", "meisterSiri", "meister"]
         }
         for name in order {
             for root in ["/opt/homebrew/bin", "/usr/local/bin"] {

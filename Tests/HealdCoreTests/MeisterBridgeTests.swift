@@ -10,8 +10,8 @@ struct MeisterBridgeTests {
             ts: iso.string(from: ts),
             score: 76,
             err: 0,
-            twin: "meisterSiri",
-            preferredTwin: "meisterSiri"
+            twin: "MeisterAI",
+            preferredTwin: "MeisterAI"
         )
     }
 
@@ -37,28 +37,42 @@ struct MeisterBridgeTests {
 
     @Test func parseLastJSONPreferredTwin() throws {
         let json = """
-        {"schema":"meister.last/v1","ts":"2026-08-24T11:14:36Z","score":76,"err":0,"twin":"meisterSiri","preferred_twin":"meisterSiri"}
+        {"schema":"meister.last/v1","ts":"2026-08-24T11:14:36Z","score":76,"err":0,"twin":"MeisterAI","preferred_twin":"MeisterAI"}
         """.data(using: .utf8)!
         let last = try MeisterBridge.parseLast(json)
         #expect(last.score == 76)
-        #expect(last.twin == "meisterSiri")
-        #expect(last.preferredTwin == "meisterSiri")
+        #expect(last.twin == "MeisterAI")
+        #expect(last.preferredTwin == "MeisterAI")
         #expect(last.ts == "2026-08-24T11:14:36Z")
     }
 
-    @Test func resolvePrefersMeisterSiriByDefault() {
-        let exists: (String) -> Bool = { $0.hasSuffix("meisterSiri") || $0.hasSuffix("meister") }
-        #expect(MeisterBridge.resolveBinary(preferred: nil, exists: exists) == "/opt/homebrew/bin/meisterSiri")
-        #expect(MeisterBridge.resolveBinary(preferred: "", exists: exists) == "/opt/homebrew/bin/meisterSiri")
+    @Test func parseLastJSONMigratesLegacyMeisterSiriTwin() throws {
+        let json = """
+        {"schema":"meister.last/v1","ts":"2026-08-24T11:14:36Z","score":76,"err":0,"twin":"meisterSiri","preferred_twin":"meisterSiri"}
+        """.data(using: .utf8)!
+        let last = try MeisterBridge.parseLast(json)
+        #expect(last.twin == "MeisterAI")
+        #expect(last.preferredTwin == "MeisterAI")
+    }
+
+    @Test func resolvePrefersMeisterAIByDefault() {
+        let exists: (String) -> Bool = { $0.hasSuffix("MeisterAI") || $0.hasSuffix("meister") }
+        #expect(MeisterBridge.resolveBinary(preferred: nil, exists: exists) == "/opt/homebrew/bin/MeisterAI")
+        #expect(MeisterBridge.resolveBinary(preferred: "", exists: exists) == "/opt/homebrew/bin/MeisterAI")
     }
 
     @Test func resolveHonorsPreferredMeister() {
-        let exists: (String) -> Bool = { $0.hasSuffix("/meister") || $0.hasSuffix("meisterSiri") }
+        let exists: (String) -> Bool = { $0.hasSuffix("/meister") || $0.hasSuffix("MeisterAI") }
         #expect(MeisterBridge.resolveBinary(preferred: "meister", exists: exists) == "/opt/homebrew/bin/meister")
     }
 
+    @Test func resolveMapsLegacyMeisterSiriPreferredToMeisterAI() {
+        let exists: (String) -> Bool = { $0.hasSuffix("MeisterAI") || $0.hasSuffix("/meister") }
+        #expect(MeisterBridge.resolveBinary(preferred: "meisterSiri", exists: exists) == "/opt/homebrew/bin/MeisterAI")
+    }
+
     @Test func resolveNilWhenMissing() {
-        #expect(MeisterBridge.resolveBinary(preferred: "meisterSiri", exists: { _ in false }) == nil)
+        #expect(MeisterBridge.resolveBinary(preferred: "MeisterAI", exists: { _ in false }) == nil)
     }
 
     @Test func skipWhenLockPresent() {
