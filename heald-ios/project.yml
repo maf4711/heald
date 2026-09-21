@@ -5,17 +5,18 @@ options:
   bundleIdPrefix: com.merados.heald
   deploymentTarget:
     iOS: "17.0"
-    watchOS: "10.0"
   xcodeVersion: "16.0"
   generateEmptyDirectories: true
   createIntermediateGroups: true
 settings:
   base:
     SWIFT_VERSION: "5.9"
+    # 1 = iPhone, 2 = iPad — universal client
+    TARGETED_DEVICE_FAMILY: "1,2"
     INFOPLIST_KEY_CFBundleDisplayName: "Heald"
     INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.utilities"
     MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "6"
+    CURRENT_PROJECT_VERSION: "3"
     DEVELOPMENT_TEAM: K63X3ZTV3Q
 targets:
   Heald:
@@ -26,7 +27,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.merados.heald.app
-        TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
@@ -34,17 +34,11 @@ targets:
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        SUPPORTS_MACCATALYST: YES
-        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
-        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: K63X3ZTV3Q
         CODE_SIGN_IDENTITY: "Apple Development"
-    dependencies:
-      - target: HealdWatch
-        embed: true
-        codeSign: true
     info:
       path: HealdApp/Info.plist
       properties:
@@ -67,50 +61,6 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-  HealdWatch:
-    type: application
-    platform: watchOS
-    deploymentTarget: "10.0"
-    sources:
-      - path: HealdWatch
-      - path: HealdApp/Models/Machine.swift
-      - path: HealdApp/Models/ActivityEvent.swift
-      - path: HealdApp/Services/HealdAPI.swift
-      - path: HealdApp/Theme.swift
-    info:
-      path: HealdWatch/Info.plist
-      properties:
-        CFBundleDisplayName: Heald
-        CFBundleIconName: AppIcon
-        CFBundleShortVersionString: "$(MARKETING_VERSION)"
-        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        WKApplication: true
-        WKCompanionAppBundleIdentifier: com.merados.heald.app
-        ITSAppUsesNonExemptEncryption: false
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.merados.heald.app.watchkitapp
-        TARGETED_DEVICE_FAMILY: "4"
-        SDKROOT: watchos
-        SUPPORTED_PLATFORMS: watchos watchsimulator
-        SUPPORTS_MACCATALYST: NO
-        IPHONEOS_DEPLOYMENT_TARGET: ""
-        ARCHS: "$(ARCHS_STANDARD)"
-        VALID_ARCHS: "arm64 arm64_32"
-        ONLY_ACTIVE_ARCH: NO
-        GENERATE_INFOPLIST_FILE: YES
-        MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "6"
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        INFOPLIST_KEY_CFBundleDisplayName: Heald
-        INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.merados.heald.app
-        INFOPLIST_KEY_WKSupportsAlwaysOnDisplay: true
-        WATCHOS_DEPLOYMENT_TARGET: "10.0"
-        CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: K63X3ZTV3Q
-    scheme: {}
-
 schemes:
   Heald:
     build:

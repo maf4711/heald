@@ -25,7 +25,6 @@ sleep 1
 
 cp -f "$SRC" "$BINARY"
 chmod 755 "$BINARY"
-codesign --force --sign - "$BINARY" >/dev/null 2>&1 || true
 
 # Plist from bank template
 BIN_ESC="$BINARY"

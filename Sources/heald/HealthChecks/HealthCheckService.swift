@@ -1,5 +1,4 @@
 import Foundation
-import HealdCore
 import ServiceLifecycle
 import OSLog
 
@@ -38,10 +37,6 @@ struct HealthCheckService: Service {
         let gitRepoScanner = GitRepoScanner()
 
         var cycle = 0
-
-        while !BootStampede.settled(uptime: ProcessInfo.processInfo.systemUptime, minimum: 180) {
-            try await Task.sleep(for: .seconds(30))
-        }
 
         while true {
             try await Task.sleep(for: .seconds(30))

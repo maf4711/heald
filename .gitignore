@@ -12,3 +12,4 @@ heald-macos/Assets/
 
 # macOS app build output
 heald-macos/build/
+build/testflight/

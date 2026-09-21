@@ -57,31 +57,15 @@ struct MaintenanceService: Service {
                 }
             }
 
-            // Daily ~09:15: prefer MeisterSiri once/day; native quick if no CLI
+            // Daily quick ~09:15
             if hour == 9 && minute >= 10 && minute < 25 && lastQuickDay != day {
                 lastQuickDay = day
-                let policy = PolicyPack.load()
-                if policy.meisterBridgeEnabled ?? true {
-                    let outcome = MeisterBridgeRunner.tick()
-                    switch outcome.action {
-                    case "ran", "skipped_already_today", "skipped_lock":
-                        break
-                    default:
-                        await runQuick(
-                            homebrew: homebrewMaintainer,
-                            proactive: proactive,
-                            autofix: autofix,
-                            selfHealingRunner: selfHealingRunner
-                        )
-                    }
-                } else {
-                    await runQuick(
-                        homebrew: homebrewMaintainer,
-                        proactive: proactive,
-                        autofix: autofix,
-                        selfHealingRunner: selfHealingRunner
-                    )
-                }
+                await runQuick(
+                    homebrew: homebrewMaintainer,
+                    proactive: proactive,
+                    autofix: autofix,
+                    selfHealingRunner: selfHealingRunner
+                )
             }
 
             // Weekly deep Sunday ~10:30

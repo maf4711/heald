@@ -5,13 +5,11 @@
 | Product | Role |
 |---------|------|
 | **heald** | Always-on self-heal, policy, compliance, fleet |
-| **Meister / meisterSiri** | Optional daily batch via `heald meister` / 09:15 bridge (skip if missing) |
+| **Meister / MeisterAI** | Private personal CLI only |
 
 ## Self-heal
 
 `SelfHealOrchestrator` every ~45s: detect → remediate (if consent=auto) → log → notify → fleet ACK.
-
-Performance autoheal (when load/CPU is high or at boot settle): Spotlight-exclude heavy trees (`~/Library/Developer`, …), strip `RunAtLoad` from interval LaunchAgents, drop Debug login items, SIGTERM runaway `du ~/Documents`. CPU storm (HUD daemon dupes, leaked `it2`, stuck `hooks statusline`) runs **every ~45s even when `consent=log`**. `heald heal` runs the same. Toggle: `performanceAutohealEnabled` in `~/.heald/policy.json`. Hold: `touch ~/.cache/cpu-guard.hold`.
 
 Plus: crash-loop quarantine, battery guardian, network DNS heal, optional safe softwareupdate, Slack webhooks, SIEM syslog, PII redaction.
 

@@ -12,9 +12,7 @@ let package = Package(
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
     ],
     targets: [
-        .target(
-            name: "HealdCore"
-        ),
+        .target(name: "HealdCore"),
         .executableTarget(
             name: "heald",
             dependencies: [
@@ -24,9 +22,6 @@ let package = Package(
                 .product(name: "GRDB", package: "GRDB.swift"),
             ]
         ),
-        .testTarget(
-            name: "HealdCoreTests",
-            dependencies: ["HealdCore"]
-        ),
+        .testTarget(name: "HealdCoreTests", dependencies: ["HealdCore"]),
     ]
 )

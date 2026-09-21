@@ -1,6 +1,5 @@
 import ArgumentParser
 import Foundation
-import HealdCore
 import ServiceLifecycle
 import OSLog
 
@@ -30,11 +29,11 @@ enum HealdMain {
 }
 
 struct HealdApp: AsyncParsableCommand {
-    static let version = "3.5.3"
+    static let version = "3.5.0"
 
     static let configuration = CommandConfiguration(
         commandName: "heald",
-        abstract: "heald Enterprise — self-healing macOS (native; optional MeisterSiri daily)",
+        abstract: "heald Enterprise — self-healing macOS (native, no Meister)",
         version: version,
         subcommands: [
             RunCommand.self,
@@ -51,7 +50,6 @@ struct HealdApp: AsyncParsableCommand {
             ApproveCommand.self,
             SudoSetupCommand.self,
             UpdateCommand.self,
-            MeisterCommand.self,
             VersionCommand.self,
         ],
         defaultSubcommand: RunCommand.self
@@ -96,17 +94,7 @@ struct DoctorCommand: AsyncParsableCommand {
         print("heald doctor v\(HealdApp.version) — Enterprise")
         print(String(repeating: "─", count: 48))
         print("Edition:    enterprise (native self-heal)")
-        let last = MeisterBridgeRunner.loadLast()
-        let bin = MeisterBridge.resolveBinary(preferred: MeisterBridgeRunner.preferredTwin() ?? last?.preferredTwin) {
-            FileManager.default.isExecutableFile(atPath: $0)
-        }
-        if let bin {
-            let ts = last?.ts ?? "no last.json"
-            let score = last?.score.map(String.init) ?? "-"
-            print("Meister:    \(bin)  last=\(ts) score=\(score)")
-        } else {
-            print("Meister:    not installed (native maintain only)")
-        }
+        print("Meister:    not required / not linked")
         print("Preset:     \(policy.preset)")
         print("Consent:    \(policy.consent.rawValue)  selfHeal=\(policy.selfHealEnabled)")
         print("Cloud:      \(policy.allowsCloud() ? "enabled" : "DISABLED (policy/HEALD_CLOUD=0)")")
@@ -159,7 +147,7 @@ struct DoctorCommand: AsyncParsableCommand {
             print("Update last:\(state) \(detail)\(remote.map { " remote=\($0)" } ?? "")")
         }
         print("Features:   policy · mdm · enroll · approve · bank · pii · siem · compliance v2")
-        print("CLI:        policy | enroll | approve | compliance | maintain | meister | heal | free | update")
+        print("CLI:        policy | enroll | approve | compliance | maintain | heal | free | update")
         let sh = dataDir.appendingPathComponent("self_heal.json")
         if let data = try? Data(contentsOf: sh),
            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -170,30 +158,6 @@ struct DoctorCommand: AsyncParsableCommand {
             }
         }
         print(String(repeating: "─", count: 48))
-    }
-}
-
-// MARK: - MeisterSiri daily batch
-
-struct MeisterCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "meister",
-        abstract: "Run meisterSiri --auto -q if not already run today"
-    )
-
-    @Flag(name: .long, help: "Run even if last.json is from today")
-    var force: Bool = false
-
-    func run() async throws {
-        setvbuf(stdout, nil, _IOLBF, 0)
-        let o = MeisterBridgeRunner.tick(force: force)
-        print("heald meister  action=\(o.action)")
-        if let b = o.binary { print("binary:  \(b)") }
-        if let c = o.exitCode { print("exit:    \(c)") }
-        if let d = o.durationSec { print("seconds: \(d)") }
-        if let t = o.detail, !t.isEmpty { print("detail:  \(t)") }
-        if o.action == "failed" { throw ExitCode(1) }
-        if o.action == "skipped_no_binary" { throw ExitCode(2) }
     }
 }
 
@@ -321,27 +285,12 @@ struct MaintainCommand: AsyncParsableCommand {
 struct HealCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "heal",
-        abstract: "Proactive healer + performance autoheal now"
+        abstract: "Proactive healer now"
     )
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
         print("heald heal...")
-        let log = try openActivityLog()
-        let healer = PerformanceHealer()
-        let storm = await healer.healCpuStorm(activityLog: log)
-        if !storm.isEmpty {
-            print("cpu storm: " + storm.map { "\($0.1):\($0.0)" }.joined(separator: ","))
-        }
-        let perf = await healer.run(activityLog: log, cpuOverall: 1, force: true)
-        if perf.didWork {
-            print("perf autoheal: spotlight=\(perf.spotlightExcluded.count) runAtLoad=\(perf.runAtLoadStripped.count) debugLogin=\(perf.debugLoginItemsRemoved.count) du=\(perf.runawayDuKilled.count) cpuStorm=\(perf.cpuStormKilled.count)")
-            for p in perf.spotlightExcluded { print("  spotlight exclude: \(p)") }
-            for a in perf.runAtLoadStripped { print("  RunAtLoad off: \(a)") }
-            for n in perf.debugLoginItemsRemoved { print("  login item removed: \(n)") }
-        } else {
-            print("perf autoheal: nothing left to fix")
-        }
-        await ProactiveHealer().run(activityLog: log)
+        await ProactiveHealer().run(activityLog: try openActivityLog())
         print("done")
     }
 }

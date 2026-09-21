@@ -1,5 +1,4 @@
 import Foundation
-import HealdCore
 import ServiceLifecycle
 import OSLog
 
@@ -15,7 +14,6 @@ struct SelfHealOrchestrator: Service {
     private let ramPurge = RAMPurge()
     private let cleaner = SystemCleaner()
     private let deepClean = DeepClean()
-    private let perf = PerformanceHealer()
 
     private let cooldowns: [String: TimeInterval] = [
         "ram_purge": 600,
@@ -26,7 +24,6 @@ struct SelfHealOrchestrator: Service {
         "proactive_heal": 1800,
         "notify_thermal": 1800,
         "brew_light": 7200,
-        "perf_autoheal": 300,
     ]
 
     private let batteryGuardian = BatteryGuardian()
@@ -38,20 +35,11 @@ struct SelfHealOrchestrator: Service {
         _ = PolicyPack.load() // ensure default policy exists
         let state = HealCooldownState()
 
-        try await Task.sleep(for: .seconds(180))
+        try await Task.sleep(for: .seconds(20))
         let policy0 = await PolicyStore.shared.current()
         if policy0.selfHealEnabled {
             await fire(state: state, key: "proactive_heal", reason: "boot hygiene", policy: policy0) {
                 await self.proactive.run(activityLog: self.activityLog)
-            }
-            if policy0.performanceAutohealEnabled ?? true {
-                await fire(state: state, key: "perf_autoheal", reason: "boot settle", policy: policy0) {
-                    _ = await self.perf.run(
-                        activityLog: self.activityLog,
-                        cpuOverall: 1,
-                        force: true
-                    )
-                }
             }
         }
 
@@ -71,16 +59,10 @@ struct SelfHealOrchestrator: Service {
             return
         }
 
-        // CPU storm (HUD dupes / leaked it2) every tick — not gated by consent=log.
-        if policy.allowsPerformanceRemediation() {
-            _ = await self.perf.healCpuStorm(activityLog: self.activityLog)
-        }
-
         let ram = await store.ram
         let disk = await store.disk
         let thermal = await store.thermal
         let security = await store.security
-        let cpu = await store.cpu
 
         // Battery + network every ~3 min
         if tick % 4 == 0 {
@@ -90,25 +72,6 @@ struct SelfHealOrchestrator: Service {
         // Safe softwareupdate hourly-ish
         if tick % 80 == 0 {
             await safeUpdate.maybeRun(activityLog: activityLog, policy: policy)
-        }
-
-        // 0) Performance stampede — high load or first tick after boot settle
-        if policy.performanceAutohealEnabled ?? true {
-            let degraded = PerformanceAutoheal.isDegraded(
-                load1: PerformanceHealer.loadAverage1(),
-                ncpu: ProcessInfo.processInfo.activeProcessorCount,
-                cpuOverall: cpu.overall,
-                uptime: ProcessInfo.processInfo.systemUptime
-            )
-            if degraded || tick <= 1 {
-                await fire(state: state, key: "perf_autoheal", reason: degraded ? "cpu/load degraded" : "boot settle", policy: policy) {
-                    _ = await self.perf.run(
-                        activityLog: self.activityLog,
-                        cpuOverall: cpu.overall,
-                        force: true
-                    )
-                }
-            }
         }
 
         // 1) RAM
@@ -240,7 +203,7 @@ struct SelfHealOrchestrator: Service {
             detail: reason
         ))
         await FleetAck.record(action: key, result: "ok", detail: reason)
-        if key != "proactive_heal" && key != "perf_autoheal" {
+        if key != "proactive_heal" {
             NotificationService.sendNotification(
                 title: "heald self-heal",
                 message: "\(key): \(reason)"
