@@ -1,18 +1,19 @@
 import SwiftUI
 
-/// Root shell: iPhone = tabs, iPad = sidebar + detail (universal).
+/// Keep navigation outside the layout branches so resizing preserves location.
 struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var navigation = RootNavigationState()
 
     var body: some View {
         Group {
             if !appState.isConfigured {
                 SettingsView(isOnboarding: true)
             } else if sizeClass == .regular {
-                IPadRootView()
+                IPadRootView(navigation: $navigation)
             } else {
-                IPhoneRootView()
+                IPhoneRootView(navigation: $navigation)
             }
         }
         .tint(Theme.accent)
@@ -24,25 +25,25 @@ struct ContentView: View {
 
 struct IPhoneRootView: View {
     @Environment(AppState.self) private var appState
-    @State private var selectedTab = 0
+    @Binding var navigation: RootNavigationState
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            DashboardView()
+        TabView(selection: $navigation.tabSelection) {
+            DashboardView(path: $navigation.dashboardPath)
                 .tabItem { Label("Fleet", systemImage: "square.grid.2x2") }
-                .tag(0)
+                .tag(SidebarItem.fleet)
             JournalView()
                 .tabItem { Label("Journal", systemImage: "list.bullet.rectangle") }
-                .tag(1)
+                .tag(SidebarItem.journal)
             AIFixesView()
                 .tabItem { Label("AI", systemImage: "brain") }
-                .tag(2)
+                .tag(SidebarItem.ai)
             HealthView()
                 .tabItem { Label("Health", systemImage: "heart.text.clipboard") }
-                .tag(3)
+                .tag(SidebarItem.health)
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
-                .tag(4)
+                .tag(SidebarItem.settings)
         }
         .overlay { loadingOverlay }
         .task { await bootstrap() }
@@ -67,12 +68,11 @@ struct IPhoneRootView: View {
 
 struct IPadRootView: View {
     @Environment(AppState.self) private var appState
-    @State private var selection: SidebarItem? = .fleet
-    @State private var selectedMachineId: String?
+    @Binding var navigation: RootNavigationState
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selection) {
+            List(selection: $navigation.sidebarSelection) {
                 Section("Monitor") {
                     Label("Fleet", systemImage: "square.grid.2x2")
                         .tag(SidebarItem.fleet)
@@ -115,18 +115,13 @@ struct IPadRootView: View {
         .navigationSplitViewStyle(.balanced)
         .overlay { loadingOverlay }
         .task { await bootstrap() }
-        .onChange(of: selection) { _, newValue in
-            if case .machine(let id) = newValue {
-                selectedMachineId = id
-            }
-        }
     }
 
     @ViewBuilder
     private var detailContent: some View {
-        switch selection ?? .fleet {
-        case .fleet:
-            DashboardView()
+        switch navigation.section {
+        case .fleet, .machine:
+            DashboardView(path: $navigation.dashboardPath)
         case .journal:
             JournalView()
         case .ai:
@@ -135,17 +130,6 @@ struct IPadRootView: View {
             HealthView()
         case .settings:
             SettingsView()
-        case .machine(let id):
-            if let machine = appState.machines.first(where: { $0.machineId == id }) {
-                NavigationStack {
-                    MachineDetailView(
-                        machine: machine,
-                        history: appState.machineHistory[id]
-                    )
-                }
-            } else {
-                ContentUnavailableView("Machine offline", systemImage: "desktopcomputer.trianglebadge.exclamationmark")
-            }
         }
     }
 
@@ -186,6 +170,47 @@ struct IPadRootView: View {
 enum SidebarItem: Hashable {
     case fleet, journal, ai, health, settings
     case machine(String)
+}
+
+struct RootNavigationState {
+    private(set) var section: SidebarItem = .fleet
+    private var machinePath: [String] = []
+
+    var tabSelection: SidebarItem {
+        get {
+            if case .machine = section { return .fleet }
+            return section
+        }
+        set {
+            section = newValue == .fleet
+                ? machinePath.last.map(SidebarItem.machine) ?? .fleet
+                : newValue
+        }
+    }
+
+    var sidebarSelection: SidebarItem? {
+        get { section }
+        set {
+            // A collapsing sidebar can clear its selection without navigating.
+            guard let newValue else { return }
+            section = newValue
+            switch newValue {
+            case .machine(let id): machinePath = [id]
+            case .fleet: machinePath = []
+            default: break
+            }
+        }
+    }
+
+    var dashboardPath: [String] {
+        get { machinePath }
+        set {
+            machinePath = newValue
+            if tabSelection == .fleet {
+                section = newValue.last.map(SidebarItem.machine) ?? .fleet
+            }
+        }
+    }
 }
 
 // MARK: - Shared chrome

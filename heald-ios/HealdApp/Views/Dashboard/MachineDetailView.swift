@@ -84,7 +84,7 @@ struct MachineDetailView: View {
             }
 
             if !machine.cpu.perCore.isEmpty {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: min(machine.cpu.perCore.count, 8)), spacing: 4) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 28), spacing: 4)], spacing: 4) {
                     ForEach(Array(machine.cpu.perCore.enumerated()), id: \.offset) { index, value in
                         let unit = machine.cpu.coreUnit(value)
                         VStack(spacing: 2) {

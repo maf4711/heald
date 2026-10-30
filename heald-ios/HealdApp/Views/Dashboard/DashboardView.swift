@@ -2,9 +2,10 @@ import SwiftUI
 
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
+    @Binding var path: [String]
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: Theme.paddingLG) {
                     // Status Summary
@@ -41,6 +42,8 @@ struct DashboardView: View {
                         machine: machine,
                         history: appState.machineHistory[machineId]
                     )
+                } else {
+                    ContentUnavailableView("Machine offline", systemImage: "desktopcomputer.trianglebadge.exclamationmark")
                 }
             }
             .refreshable {
