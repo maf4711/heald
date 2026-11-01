@@ -69,12 +69,7 @@ struct AIFixesView: View {
     }
 
     private var statsGrid: some View {
-        LazyVGrid(columns: [
-            GridItem(.flexible()),
-            GridItem(.flexible()),
-            GridItem(.flexible()),
-            GridItem(.flexible()),
-        ], spacing: Theme.paddingSM) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: Theme.paddingSM)], spacing: Theme.paddingSM) {
             StatCard(value: "\(stats.total)", label: "Total", color: Theme.textPrimary)
             StatCard(value: "\(stats.aiDriven)", label: "AI", color: Theme.accentAI)
             StatCard(value: "\(stats.healed)", label: "Healed", color: Theme.success)
