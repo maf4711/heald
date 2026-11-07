@@ -5,7 +5,7 @@
 | Product | Role |
 |---------|------|
 | **heald** | Always-on self-heal, policy, compliance, fleet |
-| **Meister / meisterSiri** | Private personal CLI only |
+| **Meister / MeisterAI** | Private personal CLI only |
 
 ## Self-heal
 
