@@ -1,0 +1,227 @@
+2026-08-25 15:40:09 +0000 [MT] Initial pipeline context: <IDEDistributionProcessingPipelineContext: 0x7bf0546700; archive(resolved)="<IDEArchive: 0x7bef887e20>", distributionTask(resolved)="2", distributionDestination(resolved)="1", distributionMethod(resolved)="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team(resolved)="<IDEProvisioningBasicTeam: 0x7bf0550760; teamID='K63X3ZTV3Q', teamName='(null)'>">
+	Chain (15, self inclusive):
+	<IDEDistributionProcessingPipelineContext: 0x7bf0546700; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team="<IDEProvisioningBasicTeam: 0x7bf0550760; teamID='K63X3ZTV3Q', teamName='(null)'>">
+	<IDEDistributionProcessingPipelineContext: 0x7bf0546a00; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team="<IDEProvisioningBasicTeam: 0x7bf0550760; teamID='K63X3ZTV3Q', teamName='(null)'>">
+	<IDEDistributionContext: 0x7bed05ed00; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team="<IDEProvisioningBasicTeam: 0x7bf0550760; teamID='K63X3ZTV3Q', teamName='(null)'>">
+	<IDEDistributionContext: 0x7bed05e080; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team="<IDEProvisioningBasicTeam: 0x7bf0550760; teamID='K63X3ZTV3Q', teamName='(null)'>">
+	<IDEDistributionContext: 0x7bed05de00; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team="<IDEProvisioningBasicTeam: 0x7bf0550760; teamID='K63X3ZTV3Q', teamName='(null)'>">
+	<IDEDistributionContext: 0x7bed05db80; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team="<IDEProvisioningBasicTeam: 0x7bf0550760; teamID='K63X3ZTV3Q', teamName='(null)'>">
+	<IDEDistributionContext: 0x7bed05d900; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team="<IDEProvisioningBasicTeam: 0x7bf0550760; teamID='K63X3ZTV3Q', teamName='(null)'>">
+	<IDEDistributionContext: 0x7bed05d680; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team="<IDEProvisioningBasicTeam: 0x7bf0550760; teamID='K63X3ZTV3Q', teamName='(null)'>">
+	<IDEDistributionContext: 0x7bed05d180; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team="<IDEProvisioningBasicTeam: 0x7bf0550760; teamID='K63X3ZTV3Q', teamName='(null)'>">
+	<IDEDistributionContext: 0x7bed05cc80; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team="<IDEProvisioningBasicTeam: 0x7bf0550760; teamID='K63X3ZTV3Q', teamName='(null)'>">
+	<IDEDistributionContext: 0x7bed05ca00; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team="<IDEProvisioningBasicTeam: 0x7bf0550760; teamID='K63X3ZTV3Q', teamName='(null)'>">
+	<IDEDistributionContext: 0x7bed05c780; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team="<IDEProvisioningBasicTeam: 0x7bf0550760; teamID='K63X3ZTV3Q', teamName='(null)'>">
+	<IDEDistributionContext: 0x7bed05c500; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team="(null)">
+	<IDEDistributionContext: 0x7bed05c000; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0x7bed95fad0>", team="(null)">
+	<IDEDistributionContext: 0x101700c40; archive = "<IDEArchive: 0x7bef887e20>", distributionMethod="(null)", team="(null)">
+</IDEDistributionProcessingPipelineContext: 0x7bf0546700>
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionCreateDestRootStep
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionCopyItemStep
+2026-08-25 15:40:09 +0000 [MT] Running /usr/bin/ditto '-V' '/Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app' '/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Root/Payload/Heald.app'
+2026-08-25 15:40:09 +0000  >>> Copying /Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app 
+2026-08-25 15:40:09 +0000  copying file ./_CodeSignature/CodeResources ... 
+2026-08-25 15:40:09 +0000  hardlinked ./_CodeSignature/CodeResources
+2026-08-25 15:40:09 +0000  copying file ./Heald ... 
+2026-08-25 15:40:09 +0000  hardlinked ./Heald
+2026-08-25 15:40:09 +0000  copying file ./AppIcon60x60@2x.png ... 
+2026-08-25 15:40:09 +0000  hardlinked ./AppIcon60x60@2x.png
+2026-08-25 15:40:09 +0000  copying file ./Assets.car ... 
+2026-08-25 15:40:09 +0000  hardlinked ./Assets.car
+2026-08-25 15:40:09 +0000  copying file ./AppIcon76x76@2x~ipad.png ... 
+2026-08-25 15:40:09 +0000  hardlinked ./AppIcon76x76@2x~ipad.png
+2026-08-25 15:40:09 +0000  copying file ./Watch/HealdWatch.app/_CodeSignature/CodeResources ... 
+2026-08-25 15:40:09 +0000  hardlinked ./Watch/HealdWatch.app/_CodeSignature/CodeResources
+2026-08-25 15:40:09 +0000  copying file ./Watch/HealdWatch.app/HealdWatch ... 
+2026-08-25 15:40:09 +0000  hardlinked ./Watch/HealdWatch.app/HealdWatch
+2026-08-25 15:40:09 +0000  copying file ./Watch/HealdWatch.app/Assets.car ... 
+2026-08-25 15:40:09 +0000  hardlinked ./Watch/HealdWatch.app/Assets.car
+2026-08-25 15:40:09 +0000  copying file ./Watch/HealdWatch.app/embedded.mobileprovision ... 
+2026-08-25 15:40:09 +0000  hardlinked ./Watch/HealdWatch.app/embedded.mobileprovision
+2026-08-25 15:40:09 +0000  copying file ./Watch/HealdWatch.app/Info.plist ... 
+2026-08-25 15:40:09 +0000  hardlinked ./Watch/HealdWatch.app/Info.plist
+2026-08-25 15:40:09 +0000  copying file ./Watch/HealdWatch.app/PkgInfo ... 
+2026-08-25 15:40:09 +0000  hardlinked ./Watch/HealdWatch.app/PkgInfo
+2026-08-25 15:40:09 +0000  copying file ./embedded.mobileprovision ... 
+2026-08-25 15:40:09 +0000  hardlinked ./embedded.mobileprovision
+2026-08-25 15:40:09 +0000  copying file ./Info.plist ... 
+2026-08-25 15:40:09 +0000  hardlinked ./Info.plist
+2026-08-25 15:40:09 +0000  copying file ./PkgInfo ... 
+2026-08-25 15:40:09 +0000  hardlinked ./PkgInfo
+2026-08-25 15:40:09 +0000 [MT] /usr/bin/ditto exited with 0
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionEmbedProfileStep
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionInfoPlistStep
+2026-08-25 15:40:09 +0000 [MT] Skipping setting DTXcodeBuildDistribution because toolsBuildVersionName was nil.
+2026-08-25 15:40:09 +0000 [MT] Skipping setting DTXcodeBuildDistribution because toolsBuildVersionName was nil.
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionItemRemovalStep
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionAppThinningPlistStep
+2026-08-25 15:40:09 +0000 [MT] Skipping step: IDEDistributionAppThinningPlistStep because it said so
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionSymbolsStep
+2026-08-25 15:40:09 +0000 [MT] Writing /var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Symbols/78634FBF-9FB4-3543-BF74-3A8D13D14CD5.symbols
+2026-08-25 15:40:09 +0000 [MT] Writing /var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Symbols/F6F00B47-7227-314F-8519-2544CFF43226.symbols
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionCopyAppleProvidedContentStep
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionAppThinningStep
+2026-08-25 15:40:09 +0000 [MT] Skipping step: IDEDistributionAppThinningStep because it said so
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionArchThinningStep
+2026-08-25 15:40:09 +0000 [MT] Archs to thin for item /Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app/Watch/HealdWatch.app are []
+2026-08-25 15:40:09 +0000 [MT] Archs to thin for item /Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app are []
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionODRStep
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionStripXattrsStep
+2026-08-25 15:40:09 +0000 [MT] Skipping stripping extended attributes because the codesign step will strip them.
+2026-08-25 15:40:09 +0000 [MT] Skipping stripping extended attributes because the codesign step will strip them.
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionCodesignStep
+2026-08-25 15:40:09 +0000 [MT] Entitlements for <IDEDistributionItem: 0x7befb946c0; bundleID='com.merados.heald.app.watchkitapp', path='<DVTFilePath:0x7befb95620:'/Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app/Watch/HealdWatch.app'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x7befb94ba0; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x7bef7bb840; name='Apple Development: Marco Foellmer (9D232C7GN5)', hash='C656D0B3D14E9436C2004CEFB67A47502880287A', serialNumber='5EE8E41DC36C369A652B8E34B71164DB', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-05-18 15:21:53 +0000''>', entitlements='{
+    "application-identifier" = "K63X3ZTV3Q.com.merados.heald.app.watchkitapp";
+    "com.apple.developer.team-identifier" = K63X3ZTV3Q;
+    "get-task-allow" = 1;
+}', teamID='K63X3ZTV3Q', identifier='com.merados.heald.app.watchkitapp', executablePath='<DVTFilePath:0x7befb95560:'/Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app/Watch/HealdWatch.app/HealdWatch'>', hardenedRuntime='0'>'>: {
+    "application-identifier" = "K63X3ZTV3Q.com.merados.heald.app.watchkitapp";
+    "beta-reports-active" = 1;
+    "com.apple.developer.team-identifier" = K63X3ZTV3Q;
+    "get-task-allow" = 0;
+}
+2026-08-25 15:40:09 +0000 [MT] Associated App Clip Identifiers Filter: Skipping because "com.apple.developer.associated-appclip-app-identifiers" is not present
+2026-08-25 15:40:09 +0000 [MT] Entitlements for <IDEDistributionItem: 0x7befb946c0; bundleID='com.merados.heald.app.watchkitapp', path='<DVTFilePath:0x7befb95620:'/Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app/Watch/HealdWatch.app'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x7befb94ba0; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x7bef7bb780; name='Apple Development: Marco Foellmer (9D232C7GN5)', hash='C656D0B3D14E9436C2004CEFB67A47502880287A', serialNumber='5EE8E41DC36C369A652B8E34B71164DB', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-05-18 15:21:53 +0000''>', entitlements='{
+    "application-identifier" = "K63X3ZTV3Q.com.merados.heald.app.watchkitapp";
+    "com.apple.developer.team-identifier" = K63X3ZTV3Q;
+    "get-task-allow" = 1;
+}', teamID='K63X3ZTV3Q', identifier='com.merados.heald.app.watchkitapp', executablePath='<DVTFilePath:0x7befb95560:'/Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app/Watch/HealdWatch.app/HealdWatch'>', hardenedRuntime='0'>'> are: {
+    "application-identifier" = "K63X3ZTV3Q.com.merados.heald.app.watchkitapp";
+    "beta-reports-active" = 1;
+    "com.apple.developer.team-identifier" = K63X3ZTV3Q;
+    "get-task-allow" = 0;
+}
+2026-08-25 15:40:09 +0000 [MT] Writing entitlements for <IDEDistributionItem: 0x7befb946c0; bundleID='com.merados.heald.app.watchkitapp', path='<DVTFilePath:0x7befb95620:'/Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app/Watch/HealdWatch.app'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x7befb94ba0; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x7bef7bb780; name='Apple Development: Marco Foellmer (9D232C7GN5)', hash='C656D0B3D14E9436C2004CEFB67A47502880287A', serialNumber='5EE8E41DC36C369A652B8E34B71164DB', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-05-18 15:21:53 +0000''>', entitlements='{
+    "application-identifier" = "K63X3ZTV3Q.com.merados.heald.app.watchkitapp";
+    "com.apple.developer.team-identifier" = K63X3ZTV3Q;
+    "get-task-allow" = 1;
+}', teamID='K63X3ZTV3Q', identifier='com.merados.heald.app.watchkitapp', executablePath='<DVTFilePath:0x7befb95560:'/Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app/Watch/HealdWatch.app/HealdWatch'>', hardenedRuntime='0'>'> to: /var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/entitlements~~~170qyY
+2026-08-25 15:40:09 +0000 [MT] invoking codesign: <NSConcreteTask: 0x7bf076b250; launchPath='/usr/bin/codesign', arguments='(
+    "-f",
+    "-s",
+    B534280F66FFD01FE031AD3E5A648E433ACA070E,
+    "--entitlements",
+    "/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/entitlements~~~170qyY",
+    "--preserve-metadata=identifier,flags,runtime,launch-constraints,library-constraints",
+    "--generate-entitlement-der",
+    "--strip-disallowed-xattrs",
+    "-vvv",
+    "/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Root/Payload/Heald.app/Watch/HealdWatch.app"
+)'>
+2026-08-25 15:40:09 +0000 [MT] codesign output: /var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Root/Payload/Heald.app/Watch/HealdWatch.app: replacing existing signature
+/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Root/Payload/Heald.app/Watch/HealdWatch.app: signed app bundle with Mach-O thin (arm64) [com.merados.heald.app.watchkitapp]
+2026-08-25 15:40:09 +0000 [MT] Entitlements for <IDEDistributionItem: 0x7befb94b40; bundleID='com.merados.heald.app', path='<DVTFilePath:0x7befa41860:'/Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x7befb94ae0; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x7bef7bb840; name='Apple Development: Marco Foellmer (9D232C7GN5)', hash='C656D0B3D14E9436C2004CEFB67A47502880287A', serialNumber='5EE8E41DC36C369A652B8E34B71164DB', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-05-18 15:21:53 +0000''>', entitlements='{
+    "application-identifier" = "K63X3ZTV3Q.com.merados.heald.app";
+    "com.apple.developer.team-identifier" = K63X3ZTV3Q;
+    "get-task-allow" = 1;
+}', teamID='K63X3ZTV3Q', identifier='com.merados.heald.app', executablePath='<DVTFilePath:0x7befb94000:'/Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app/Heald'>', hardenedRuntime='0'>'>: {
+    "application-identifier" = "K63X3ZTV3Q.com.merados.heald.app";
+    "beta-reports-active" = 1;
+    "com.apple.developer.team-identifier" = K63X3ZTV3Q;
+    "get-task-allow" = 0;
+}
+2026-08-25 15:40:09 +0000 [MT] Associated App Clip Identifiers Filter: Skipping because "com.apple.developer.associated-appclip-app-identifiers" is not present
+2026-08-25 15:40:09 +0000 [MT] Entitlements for <IDEDistributionItem: 0x7befb94b40; bundleID='com.merados.heald.app', path='<DVTFilePath:0x7befa41860:'/Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x7befb94ae0; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x7bef7bb780; name='Apple Development: Marco Foellmer (9D232C7GN5)', hash='C656D0B3D14E9436C2004CEFB67A47502880287A', serialNumber='5EE8E41DC36C369A652B8E34B71164DB', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-05-18 15:21:53 +0000''>', entitlements='{
+    "application-identifier" = "K63X3ZTV3Q.com.merados.heald.app";
+    "com.apple.developer.team-identifier" = K63X3ZTV3Q;
+    "get-task-allow" = 1;
+}', teamID='K63X3ZTV3Q', identifier='com.merados.heald.app', executablePath='<DVTFilePath:0x7befb94000:'/Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app/Heald'>', hardenedRuntime='0'>'> are: {
+    "application-identifier" = "K63X3ZTV3Q.com.merados.heald.app";
+    "beta-reports-active" = 1;
+    "com.apple.developer.team-identifier" = K63X3ZTV3Q;
+    "get-task-allow" = 0;
+}
+2026-08-25 15:40:09 +0000 [MT] Writing entitlements for <IDEDistributionItem: 0x7befb94b40; bundleID='com.merados.heald.app', path='<DVTFilePath:0x7befa41860:'/Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0x7befb94ae0; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0x7bef7bb780; name='Apple Development: Marco Foellmer (9D232C7GN5)', hash='C656D0B3D14E9436C2004CEFB67A47502880287A', serialNumber='5EE8E41DC36C369A652B8E34B71164DB', certificateKinds='(
+    "1.2.840.113635.100.6.1.12",
+    "1.2.840.113635.100.6.1.2"
+), issueDate='2026-05-18 15:21:53 +0000''>', entitlements='{
+    "application-identifier" = "K63X3ZTV3Q.com.merados.heald.app";
+    "com.apple.developer.team-identifier" = K63X3ZTV3Q;
+    "get-task-allow" = 1;
+}', teamID='K63X3ZTV3Q', identifier='com.merados.heald.app', executablePath='<DVTFilePath:0x7befb94000:'/Users/a321/Developer/heald/build/testflight/Heald.xcarchive/Products/Applications/Heald.app/Heald'>', hardenedRuntime='0'>'> to: /var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/entitlements~~~vqFKVc
+2026-08-25 15:40:09 +0000 [MT] invoking codesign: <NSConcreteTask: 0x7bf076b340; launchPath='/usr/bin/codesign', arguments='(
+    "-f",
+    "-s",
+    B534280F66FFD01FE031AD3E5A648E433ACA070E,
+    "--entitlements",
+    "/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/entitlements~~~vqFKVc",
+    "--preserve-metadata=identifier,flags,runtime,launch-constraints,library-constraints",
+    "--generate-entitlement-der",
+    "--strip-disallowed-xattrs",
+    "-vvv",
+    "/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Root/Payload/Heald.app"
+)'>
+2026-08-25 15:40:09 +0000 [MT] codesign output: /var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Root/Payload/Heald.app: replacing existing signature
+/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Root/Payload/Heald.app: signed app bundle with Mach-O thin (arm64) [com.merados.heald.app]
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionZipODRItemStep
+2026-08-25 15:40:09 +0000 [MT] Skipping step: IDEDistributionZipODRItemStep because it said so
+2026-08-25 15:40:09 +0000 [MT] Skipping step: IDEDistributionZipODRItemStep because it said so
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionCreateIPAStep
+2026-08-25 15:40:09 +0000 [MT] Running /usr/bin/rsync '-8aPhhE' '/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Symbols' '--link-dest' '/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA' '/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Root'
+2026-08-25 15:40:09 +0000  Symbols/
+._Symbols
+            163 127%    1.92MB/s   00:00:00 (xfer#1, to-check=0/6)
+2026-08-25 15:40:09 +0000  Symbols/78634FBF-9FB4-3543-BF74-3A8D13D14CD5.symbols
+Symbols/F6F00B47-7227-314F-8519-2544CFF43226.symbols
+Symbols/._78634FBF-9FB4-3543-BF74-3A8D13D14CD5.symbols
+            163   0%  279.82KB/s   00:00:00 (xfer#2, to-check=2/6)
+2026-08-25 15:40:09 +0000  Symbols/._F6F00B47-7227-314F-8519-2544CFF43226.symbols
+            163   0%  317.63KB/s   00:00:00 (xfer#3, to-check=3/6)
+2026-08-25 15:40:09 +0000 [MT] /usr/bin/rsync exited with 0
+2026-08-25 15:40:09 +0000 [MT] Running /usr/bin/ditto '-V' '-c' '-k' '--norsrc' '/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Root' '/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Packages/Heald.ipa'
+2026-08-25 15:40:09 +0000  >>> Copying /var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Root 
+2026-08-25 15:40:09 +0000  copying file ./Payload/Heald.app/_CodeSignature/CodeResources ... 
+2026-08-25 15:40:09 +0000  4321 bytes for ./Payload/Heald.app/_CodeSignature/CodeResources
+2026-08-25 15:40:09 +0000  copying file ./Payload/Heald.app/Heald ... 
+2026-08-25 15:40:09 +0000  716816 bytes for ./Payload/Heald.app/Heald
+2026-08-25 15:40:09 +0000  copying file ./Payload/Heald.app/AppIcon60x60@2x.png ... 
+2026-08-25 15:40:09 +0000  4693 bytes for ./Payload/Heald.app/AppIcon60x60@2x.png
+2026-08-25 15:40:09 +0000  copying file ./Payload/Heald.app/Assets.car ... 
+2026-08-25 15:40:09 +0000  98248 bytes for ./Payload/Heald.app/Assets.car
+2026-08-25 15:40:09 +0000  copying file ./Payload/Heald.app/AppIcon76x76@2x~ipad.png ... 
+2026-08-25 15:40:09 +0000  5909 bytes for ./Payload/Heald.app/AppIcon76x76@2x~ipad.png
+2026-08-25 15:40:09 +0000  copying file ./Payload/Heald.app/Watch/HealdWatch.app/_CodeSignature/CodeResources ... 
+2026-08-25 15:40:09 +0000  2317 bytes for ./Payload/Heald.app/Watch/HealdWatch.app/_CodeSignature/CodeResources
+2026-08-25 15:40:09 +0000  copying file ./Payload/Heald.app/Watch/HealdWatch.app/HealdWatch ... 
+2026-08-25 15:40:09 +0000  255504 bytes for ./Payload/Heald.app/Watch/HealdWatch.app/HealdWatch
+2026-08-25 15:40:09 +0000  copying file ./Payload/Heald.app/Watch/HealdWatch.app/Assets.car ... 
+2026-08-25 15:40:09 +0000  2119672 bytes for ./Payload/Heald.app/Watch/HealdWatch.app/Assets.car
+2026-08-25 15:40:09 +0000  copying file ./Payload/Heald.app/Watch/HealdWatch.app/embedded.mobileprovision ... 
+2026-08-25 15:40:09 +0000  16454 bytes for ./Payload/Heald.app/Watch/HealdWatch.app/embedded.mobileprovision
+2026-08-25 15:40:09 +0000  copying file ./Payload/Heald.app/Watch/HealdWatch.app/Info.plist ... 
+2026-08-25 15:40:09 +0000  1044 bytes for ./Payload/Heald.app/Watch/HealdWatch.app/Info.plist
+2026-08-25 15:40:09 +0000  copying file ./Payload/Heald.app/Watch/HealdWatch.app/PkgInfo ... 
+2026-08-25 15:40:09 +0000  8 bytes for ./Payload/Heald.app/Watch/HealdWatch.app/PkgInfo
+2026-08-25 15:40:09 +0000  copying file ./Payload/Heald.app/embedded.mobileprovision ... 
+2026-08-25 15:40:09 +0000  16327 bytes for ./Payload/Heald.app/embedded.mobileprovision
+2026-08-25 15:40:09 +0000  copying file ./Payload/Heald.app/Info.plist ... 
+2026-08-25 15:40:09 +0000  1417 bytes for ./Payload/Heald.app/Info.plist
+2026-08-25 15:40:09 +0000  copying file ./Payload/Heald.app/PkgInfo ... 
+2026-08-25 15:40:09 +0000  8 bytes for ./Payload/Heald.app/PkgInfo
+2026-08-25 15:40:09 +0000  copying file ./Symbols/F6F00B47-7227-314F-8519-2544CFF43226.symbols ... 
+2026-08-25 15:40:09 +0000  413124 bytes for ./Symbols/F6F00B47-7227-314F-8519-2544CFF43226.symbols
+2026-08-25 15:40:09 +0000  copying file ./Symbols/78634FBF-9FB4-3543-BF74-3A8D13D14CD5.symbols ... 
+2026-08-25 15:40:09 +0000  2014580 bytes for ./Symbols/78634FBF-9FB4-3543-BF74-3A8D13D14CD5.symbols
+2026-08-25 15:40:09 +0000 [MT] /usr/bin/ditto exited with 0
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionAppStoreInformationStep
+2026-08-25 15:40:09 +0000 [MT] Skipping step: IDEDistributionAppStoreInformationStep because it said so
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionGenerateProcessedDistributionItems
+2026-08-25 15:40:09 +0000 [MT] IDEDistributionItem init <DVTFilePath:0x7befa43660:'/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Root/Payload/Heald.app/Watch/HealdWatch.app'>
+2026-08-25 15:40:09 +0000 [MT] IDEDistributionItem init <DVTFilePath:0x7befa43600:'/var/folders/mv/klpvqdjn27z4j075hmm1jn7w0000gp/T/XcodeDistPipeline.~~~YrFoYA/Root/Payload/Heald.app'>
+2026-08-25 15:40:09 +0000 [MT] Processing step: IDEDistributionCreateManifestStep
+2026-08-25 15:40:09 +0000 [MT] Skipping step: IDEDistributionCreateManifestStep because it said so

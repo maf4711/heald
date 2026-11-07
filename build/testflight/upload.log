@@ -1,0 +1,64 @@
+Running altool at path '/Applications/Xcode.app/Contents/SharedFrameworks/ContentDelivery.framework/Resources/altool'...
+
+2026-08-25 17:41:18.551 ERROR: [ContentDelivery.Uploader.769CC1C340] 
+=======================================
+UPLOAD FAILED with 7 errors
+=======================================
+2026-08-25 17:41:18.553 ERROR: [altool.769CC1C340] Missing architecture. The “Heald.app/Watch/HealdWatch.app” bundle is missing the [arm64_32] architecture(s). The arm64_32 architecture is required for watchOS apps and app extensions with a MinimumOSVersion less than 27.0. The arm64 architecture is required for all watchOS apps and app extensions. We recommend using the default Xcode build setting of “Standard Architectures” to build a binary with support for all required architectures. (90733) The server’s response was: ‘{
+    code = 90733;
+    description = "Missing architecture. The \U201cHeald.app/Watch/HealdWatch.app\U201d bundle is missing the [arm64_32] architecture(s). The arm64_32 architecture is required for watchOS apps and app extensions with a MinimumOSVersion less than 27.0. The arm64 architecture is required for all watchOS apps and app extensions. We recommend using the default Xcode build setting of \U201cStandard Architectures\U201d to build a binary with support for all required architectures.";
+}’.
+   NSUnderlyingError : A server error occurred. (-19241)
+      code : 90733
+      description : Missing architecture. The “Heald.app/Watch/HealdWatch.app” bundle is missing the [arm64_32] architecture(s). The arm64_32 architecture is required for watchOS apps and app extensions with a MinimumOSVersion less than 27.0. The arm64 architecture is required for all watchOS apps and app extensions. We recommend using the default Xcode build setting of “Standard Architectures” to build a binary with support for all required architectures.
+   iris-code : 90733
+Invalid Info.plist value. The value of the MinimumOSVersion Info.plist key in the com.merados.heald.app.watchkitapp bundle, 17.0, is invalid. It must specify an operating system version of 26.0 or later, or a version earlier than 12.0. (91164) The server’s response was: ‘{
+    code = 91164;
+    description = "Invalid Info.plist value. The value of the MinimumOSVersion Info.plist key in the com.merados.heald.app.watchkitapp bundle, 17.0, is invalid. It must specify an operating system version of 26.0 or later, or a version earlier than 12.0.";
+}’.
+   NSUnderlyingError : A server error occurred. (-19241)
+      code : 91164
+      description : Invalid Info.plist value. The value of the MinimumOSVersion Info.plist key in the com.merados.heald.app.watchkitapp bundle, 17.0, is invalid. It must specify an operating system version of 26.0 or later, or a version earlier than 12.0.
+   iris-code : 91164
+Unsupported Key. The Info.plist of bundle Heald.app/Watch/HealdWatch.app may not contain the UIRequiredDeviceCapabilities key. (90595) The server’s response was: ‘{
+    code = 90595;
+    description = "Unsupported Key. The Info.plist of bundle Heald.app/Watch/HealdWatch.app may not contain the UIRequiredDeviceCapabilities key.";
+}’.
+   NSUnderlyingError : A server error occurred. (-19241)
+      code : 90595
+      description : Unsupported Key. The Info.plist of bundle Heald.app/Watch/HealdWatch.app may not contain the UIRequiredDeviceCapabilities key.
+   iris-code : 90595
+Invalid UIDeviceFamily. The Info.plist of Apple Watch application 'Heald.app/Watch/HealdWatch.app' contains an invalid UIDeviceFamily value of '2'. (90524) The server’s response was: ‘{
+    code = 90524;
+    description = "Invalid UIDeviceFamily. The Info.plist of Apple Watch application 'Heald.app/Watch/HealdWatch.app' contains an invalid UIDeviceFamily value of '2'.";
+}’.
+   NSUnderlyingError : A server error occurred. (-19241)
+      code : 90524
+      description : Invalid UIDeviceFamily. The Info.plist of Apple Watch application 'Heald.app/Watch/HealdWatch.app' contains an invalid UIDeviceFamily value of '2'.
+   iris-code : 90524
+Invalid UIDeviceFamily. The Info.plist of Apple Watch application 'Heald.app/Watch/HealdWatch.app' contains an invalid UIDeviceFamily value of '1'. (90524) The server’s response was: ‘{
+    code = 90524;
+    description = "Invalid UIDeviceFamily. The Info.plist of Apple Watch application 'Heald.app/Watch/HealdWatch.app' contains an invalid UIDeviceFamily value of '1'.";
+}’.
+   NSUnderlyingError : A server error occurred. (-19241)
+      code : 90524
+      description : Invalid UIDeviceFamily. The Info.plist of Apple Watch application 'Heald.app/Watch/HealdWatch.app' contains an invalid UIDeviceFamily value of '1'.
+   iris-code : 90524
+Missing Icons. No icons found for watch application 'Heald.app/Watch/HealdWatch.app'. Make sure that its Info.plist file includes entries for CFBundleIconFiles. (90391) The server’s response was: ‘{
+    code = 90391;
+    description = "Missing Icons. No icons found for watch application 'Heald.app/Watch/HealdWatch.app'. Make sure that its Info.plist file includes entries for CFBundleIconFiles.";
+}’.
+   NSUnderlyingError : A server error occurred. (-19241)
+      code : 90391
+      description : Missing Icons. No icons found for watch application 'Heald.app/Watch/HealdWatch.app'. Make sure that its Info.plist file includes entries for CFBundleIconFiles.
+   iris-code : 90391
+Invalid Info.plist value. The value for the key 'DTPlatformName' in bundle Heald.app/Watch/HealdWatch.app is invalid. (90508) The server’s response was: ‘{
+    code = 90508;
+    description = "Invalid Info.plist value. The value for the key 'DTPlatformName' in bundle Heald.app/Watch/HealdWatch.app is invalid.";
+}’.
+   NSUnderlyingError : A server error occurred. (-19241)
+      code : 90508
+      description : Invalid Info.plist value. The value for the key 'DTPlatformName' in bundle Heald.app/Watch/HealdWatch.app is invalid.
+   iris-code : 90508
+2026-08-25 17:41:18.554 ERROR: [altool.1035165C0] ExitFailure (31)
+Failed to upload package.
