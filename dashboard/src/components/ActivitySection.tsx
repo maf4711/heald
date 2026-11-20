@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { t } from "@/lib/theme";
+import { usePolled } from "@/components/usePolled";
 
 interface Event {
   timestamp: string;
@@ -14,21 +14,7 @@ interface Event {
 
 // "Activity" section: polls GET /api/events (last 100) every 5 s.
 export function ActivitySection() {
-  const [events, setEvents] = useState<Event[]>([]);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch("/api/events?limit=100", { cache: "no-store" });
-        if (res.ok) setEvents((await res.json()).events ?? []);
-      } catch {
-        /* retry */
-      }
-    };
-    load();
-    const interval = setInterval(load, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  const events = usePolled<Event>("/api/events?limit=100", "events", 5000);
 
   return (
     <section style={{ marginTop: 36 }}>

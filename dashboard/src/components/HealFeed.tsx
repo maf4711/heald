@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { t } from "@/lib/theme";
+import { usePolled } from "@/components/usePolled";
 import type { HealOutcome, HealReport } from "@/lib/heal-report";
 
 type MachineName = { machineId: string; hostname: string };
@@ -27,21 +27,7 @@ export function healSummary(h: HealReport): string {
 
 // Central "Autoheal" log: GET /api/heals, polled like the activity feed.
 export function HealFeed({ machines }: { machines: MachineName[] }) {
-  const [heals, setHeals] = useState<HealReport[]>([]);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch("/api/heals?limit=100", { cache: "no-store" });
-        if (res.ok) setHeals((await res.json()).heals ?? []);
-      } catch {
-        /* retry on next tick */
-      }
-    };
-    load();
-    const interval = setInterval(load, 10000);
-    return () => clearInterval(interval);
-  }, []);
+  const heals = usePolled<HealReport>("/api/heals?limit=100", "heals", 10000);
 
   const names = new Map(machines.map((m) => [m.machineId, m.hostname]));
 

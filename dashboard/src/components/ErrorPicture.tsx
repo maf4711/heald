@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { t } from "@/lib/theme";
+import { usePolled } from "@/components/usePolled";
 import type { MachineErrorPicture } from "@/lib/heal-report";
 
 type MachineName = { machineId: string; hostname: string };
@@ -22,21 +22,7 @@ export function pictureSummary(name: string, p: MachineErrorPicture): string {
 // Per-machine "Fehlerbild": open findings by severity, fixed count, last fix.
 // Computed server-side over the full buckets (GET /api/error-picture).
 export function ErrorPicture({ machines }: { machines: MachineName[] }) {
-  const [pictures, setPictures] = useState<MachineErrorPicture[]>([]);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch("/api/error-picture", { cache: "no-store" });
-        if (res.ok) setPictures((await res.json()).machines ?? []);
-      } catch {
-        /* retry on next tick */
-      }
-    };
-    load();
-    const interval = setInterval(load, 10000);
-    return () => clearInterval(interval);
-  }, []);
+  const pictures = usePolled<MachineErrorPicture>("/api/error-picture", "machines", 10000);
 
   const names = new Map(machines.map((m) => [m.machineId, m.hostname]));
 
