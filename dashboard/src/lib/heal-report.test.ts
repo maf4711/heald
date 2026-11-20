@@ -16,12 +16,18 @@ import {
 } from "./heal-report.ts";
 import { applySnapshot, createState, pushEvent, snapshotFromState, MAX_EVENTS } from "./store-snapshot.ts";
 
+// Fixture times relative to the wall clock (a day ago + offset), so records
+// never fall into the "more than 24 h in the future" rejection window.
+const HOUR = 3600_000;
+const BASE = Date.now() - 24 * HOUR;
+const at = (offsetMs: number) => new Date(BASE + offsetMs).toISOString();
+
 function heal(over: Partial<HealReport> = {}): HealReport {
   return {
     schema: "heald.heal_report/v1",
     id: "7f0c-0001",
     machineId: "409C591A-node-a",
-    ts: "2026-11-21T09:00:00Z",
+    ts: at(9 * HOUR),
     healdVersion: "3.6.0",
     action: "disk_cleanup",
     trigger: "disk free 9%",
@@ -52,8 +58,8 @@ function finding(over: Partial<Finding> = {}): Finding {
     status: "open",
     recurrenceCount: 0,
     linkedAction: "app_restart",
-    firstSeen: "2026-11-21T08:00:00Z",
-    lastSeen: "2026-11-21T09:00:00Z",
+    firstSeen: at(8 * HOUR),
+    lastSeen: at(9 * HOUR),
     ...over,
   };
 }
@@ -144,9 +150,9 @@ test("(c) duplicate heal id (daemon retry) is stored once", () => {
 
 test("applyHeals sorts newest first and caps at MAX_HEALS", () => {
   const sorted = applyHeals([], [
-    heal({ id: "old", ts: "2026-11-01T00:00:00Z" }),
-    heal({ id: "new", ts: "2026-11-21T00:00:00Z" }),
-    heal({ id: "mid", ts: "2026-11-10T00:00:00Z" }),
+    heal({ id: "old", ts: at(0) }),
+    heal({ id: "new", ts: at(20 * HOUR) }),
+    heal({ id: "mid", ts: at(10 * HOUR) }),
   ]);
   assert.deepEqual(sorted.map((h) => h.id), ["new", "mid", "old"]);
 
@@ -179,7 +185,7 @@ test("(f) clampLimit clamps to 1..500", () => {
 // (h)
 test("(h) open then fixed finding with same fingerprint -> 1 entry, status fixed", () => {
   const open = applyFindings([], [finding({ status: "open" })]);
-  const fixed = applyFindings(open, [finding({ status: "fixed", lastSeen: "2026-11-21T10:00:00Z" })]);
+  const fixed = applyFindings(open, [finding({ status: "fixed", lastSeen: at(10 * HOUR) })]);
   assert.equal(fixed.length, 1);
   assert.equal(fixed[0].status, "fixed");
 });
@@ -211,12 +217,12 @@ test("applyFindings caps at MAX_FINDINGS_PER_MACHINE per machine, keeping newest
 test("(g) 10 heals then 2000 maccluster_status events -> heals length 10, snapshot restores them", () => {
   const live = createState();
   applySnapshot(live, {
-    heals: Array.from({ length: 10 }, (_, i) => heal({ id: `h${i}`, ts: `2026-11-21T09:0${i}:00Z` })),
+    heals: Array.from({ length: 10 }, (_, i) => heal({ id: `h${i}`, ts: at(9 * HOUR + i * 60_000) })),
     findings: [finding()],
   });
   for (let i = 0; i < 2000; i++) {
     pushEvent(live, {
-      timestamp: new Date(Date.UTC(2026, 10, 21) + i).toISOString(),
+      timestamp: at(i),
       machineId: "409C591A-node-a",
       type: "maccluster_status",
       summary: `status ${i}`,
@@ -297,9 +303,9 @@ test("(i) machineErrorPicture counts open critical/error/warning and fixed per m
     finding({ machineId: "node-b", fingerprint: "crash:7", severity: "error", status: "fixed" }),
   ];
   const heals = [
-    heal({ id: "1", machineId: "node-a", ts: "2026-11-21T08:00:00Z", outcome: "executed_ok" }),
-    heal({ id: "2", machineId: "node-a", ts: "2026-11-21T09:00:00Z", outcome: "executed_failed" }),
-    heal({ id: "3", machineId: "node-a", ts: "2026-11-21T07:00:00Z", outcome: "approved_executed" }),
+    heal({ id: "1", machineId: "node-a", ts: at(8 * HOUR), outcome: "executed_ok" }),
+    heal({ id: "2", machineId: "node-a", ts: at(9 * HOUR), outcome: "executed_failed" }),
+    heal({ id: "3", machineId: "node-a", ts: at(7 * HOUR), outcome: "approved_executed" }),
   ];
   const pics = machineErrorPicture(findings, heals);
   const a = pics.find((p) => p.machineId === "node-a");

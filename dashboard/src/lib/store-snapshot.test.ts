@@ -15,7 +15,7 @@ const healOf = (id: string): HealReport => ({
   schema: "heald.heal_report/v1",
   id,
   machineId: "node-a",
-  ts: "2026-11-20T09:00:00Z",
+  ts: new Date(Date.now() - 3600_000).toISOString(), // relative: never "in the future"
   healdVersion: "3.6.0",
   action: "disk_cleanup",
   trigger: "t",
