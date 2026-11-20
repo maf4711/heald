@@ -8,6 +8,7 @@ import OSLog
 struct SelfHealOrchestrator: Service {
     let store: MetricsStore
     let activityLog: ActivityLog
+    let ai: AppleIntelligenceClient
 
     private let pollSeconds: Int = 45
     private let autofix = AutofixEngine()
@@ -205,6 +206,36 @@ struct SelfHealOrchestrator: Service {
         let cd = cooldowns[key] ?? 900
         guard await state.canFire(key: key, cooldown: cd) else { return }
 
+        // Advisor (Apple FM, on-device): may only downgrade proceed → defer/skip. Never executes.
+        if let healAction = HealdCore.HealAction(rawValue: key) {
+            let ai = self.ai
+            let context = "cooldown=\(Int(cd))s consent=\(policy.consent.rawValue)"
+            let verdict = await AutohealAdvisor.consult(
+                ruleAction: healAction,
+                timeout: AutohealAdvisor.defaultTimeout,
+                available: await ai.isAvailable
+            ) {
+                await ai.adviseHeal(action: key, reason: reason, context: context)
+            }
+            await logAdvice(verdict)
+            switch verdict.recommendation {
+            case .proceed:
+                break
+            case .defer:
+                await state.markFired(key: key)
+                return
+            case .skip:
+                await state.markFired(key: key)
+                try? await activityLog.log(event: ActivityEvent(
+                    type: .healingAttempt,
+                    summary: "Self-heal SKIPPED by advisor: \(key)",
+                    detail: verdict.rationale,
+                    aiGenerated: verdict.source == .appleFM
+                ))
+                return
+            }
+        }
+
         // Consent: log-only never remediates; ask needs `heald approve <key>` (or consent=auto)
         if !policy.allowsRemediation() {
             if policy.consent == .ask, ApprovalStore.consume(action: key) {
@@ -249,6 +280,15 @@ struct SelfHealOrchestrator: Service {
             )
             await WebhookNotifier.shared.emit(title: key, text: reason, severity: "info")
         }
+    }
+
+    private func logAdvice(_ v: AdvisorVerdict) async {
+        try? await activityLog.log(event: ActivityEvent(
+            type: .aiAdvice,
+            summary: "Advisor \(v.action.rawValue): \(v.recommendation.rawValue) (\(String(format: "%.2f", v.confidence)))",
+            detail: String(v.rationale.prefix(AutohealAdvisor.maxRationaleChars)),
+            aiGenerated: v.source == .appleFM
+        ))
     }
 
     private func writeStatus(

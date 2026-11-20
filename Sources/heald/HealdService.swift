@@ -25,7 +25,7 @@ struct HealdService: Service {
         let healthCheckService = HealthCheckService(store: store, activityLog: activityLog)
         let notificationService = NotificationService(store: store, activityLog: activityLog, ai: ai)
         let maintenanceService = MaintenanceService(store: store, db: db, activityLog: activityLog, ai: ai)
-        let selfHeal = SelfHealOrchestrator(store: store, activityLog: activityLog)
+        let selfHeal = SelfHealOrchestrator(store: store, activityLog: activityLog, ai: ai)
 
         let cpuCollector = CPUCollector(store: store)
         let ramCollector = RAMCollector(store: store)
