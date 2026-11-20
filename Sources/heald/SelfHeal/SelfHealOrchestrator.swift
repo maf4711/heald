@@ -17,7 +17,7 @@ struct SelfHealOrchestrator: Service {
     private let cleaner = SystemCleaner()
     private let deepClean = DeepClean()
     private let perf = PerformanceHealer()
-    private let scannerRemediation = ScannerRemediation()
+    let scannerRemediation = ScannerRemediation()
 
     private let cooldowns: [String: TimeInterval] = [
         "ram_purge": 600,
@@ -32,6 +32,8 @@ struct SelfHealOrchestrator: Service {
         "app_restart": 60,
         "dns_flush": 600,
     ]
+
+    func cooldown(for key: String) -> TimeInterval { cooldowns[key] ?? 900 }
 
     private let batteryGuardian = BatteryGuardian()
     private let networkHeal = NetworkSelfHeal()
@@ -205,39 +207,9 @@ struct SelfHealOrchestrator: Service {
         await writeStatus(state: state, ram: ram, disk: disk, policy: policy)
     }
 
-    /// Drain scanner-requested `app_restart` / `dns_flush` and run them via `fire`
-    /// (advisor + cooldown + consent: consent=log logs BLOCKED and never executes).
-    private func healScannerFindings(
-        state: HealCooldownState,
-        policy: PolicyPack,
-        memoryCritical: Bool,
-        budget: inout AdvisorBudget
-    ) async {
-        for healAction in [HealdCore.HealAction.appRestart, .dnsFlush] {
-            let key = healAction.rawValue
-            let targets = await FindingsStore.shared.peek(healAction)
-            guard !targets.isEmpty else { continue }
-            let reason = "\(key) for \(targets.joined(separator: ", "))"
-            // Drain inside the action: requests survive cooldown, advisor defer and consent=ask.
-            let outcome = await fire(state: state, key: key, reason: reason, policy: policy, memoryCritical: memoryCritical, budget: &budget) {
-                let requests = await FindingsStore.shared.drain(healAction)
-                await self.scannerRemediation.run(healAction, requests, activityLog: self.activityLog)
-            }
-            switch (ScannerQueue.disposition(after: outcome), outcome) {
-            case (.drop, _):
-                _ = await FindingsStore.shared.drain(healAction) // consent=log / advisor skip: never runs
-            case (.keep, .blockedAsk):
-                // Keep waiting for `heald approve`, but don't re-notify every 60 s cooldown.
-                let cd = cooldowns[key] ?? 900
-                await state.markFired(key: key, at: Date().addingTimeInterval(ScannerQueue.askRetryInterval - cd))
-            default:
-                break
-            }
-        }
-    }
-
+    /// Gate shared by every action: cooldown → advisor → consent → run.
     @discardableResult
-    private func fire(
+    func fire(
         state: HealCooldownState,
         key: String,
         reason: String,
@@ -246,7 +218,7 @@ struct SelfHealOrchestrator: Service {
         budget: inout AdvisorBudget,
         action: @escaping () async -> Void
     ) async -> GateOutcome {
-        let cd = cooldowns[key] ?? 900
+        let cd = cooldown(for: key)
         guard await state.canFire(key: key, cooldown: cd) else { return .cooldown }
 
         // Advisor (Apple FM, on-device): may only downgrade proceed → defer/skip. Never executes.
@@ -393,27 +365,5 @@ struct SelfHealOrchestrator: Service {
         if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: dir.appendingPathComponent("self_heal.json"), options: .atomic)
         }
-    }
-}
-
-actor HealCooldownState {
-    private var last: [String: Date] = [:]
-
-    func canFire(key: String, cooldown: TimeInterval) -> Bool {
-        guard let t = last[key] else { return true }
-        return Date().timeIntervalSince(t) >= cooldown
-    }
-
-    func markFired(key: String, at date: Date = Date()) {
-        last[key] = date
-    }
-
-    func snapshot() -> [String: String] {
-        let f = ISO8601DateFormatter()
-        var out: [String: String] = [:]
-        for (k, v) in last {
-            out[k] = f.string(from: v)
-        }
-        return out
     }
 }
