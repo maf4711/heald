@@ -57,7 +57,7 @@ struct SelfHealingRunner {
         }
         guard case .value(let text?) = result else { return }
         try? await activityLog.log(event: ActivityEvent(
-            type: .aiAdvice,
+            type: .aiDiagnosis,
             summary: "Advisor diagnosis for \(name)",
             detail: String(text.prefix(AutohealAdvisor.maxRationaleChars)),
             aiGenerated: true

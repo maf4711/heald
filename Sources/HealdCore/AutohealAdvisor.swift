@@ -68,6 +68,14 @@ public struct AdvisorVerdict: Codable, Sendable, Equatable {
 }
 
 extension AdvisorVerdict {
+    /// Single-line JSON (sorted keys) for the `ai_advice` event's structured field.
+    public var structuredJSON: String? {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        guard let data = try? enc.encode(self) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
     func truncated() -> AdvisorVerdict {
         var v = self
         v.rationale = String(v.rationale.prefix(AutohealAdvisor.maxRationaleChars))

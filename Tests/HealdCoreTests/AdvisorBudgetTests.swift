@@ -55,4 +55,19 @@ struct AdvisorBudgetTests {
         b.record(v)
         #expect(b.tripped)
     }
+
+}
+
+/// Reviewer fix 7: ai_advice carries the verdict as structured JSON.
+struct AdvisorVerdictEncodingTests {
+    @Test func structuredJSONRoundTripsWithStableKeys() throws {
+        let v = AdvisorVerdict(action: .diskCleanup, recommendation: .proceed, confidence: 0.82,
+                               rationale: "Root volume under 10 % free", source: .appleFM, latencyMs: 812)
+        let json = try #require(v.structuredJSON)
+        #expect(json.contains(#""action":"disk_cleanup""#))
+        #expect(json.contains(#""source":"appleFM""#))
+        #expect(!json.contains("\n"))
+        let back = try JSONDecoder().decode(AdvisorVerdict.self, from: Data(json.utf8))
+        #expect(back == v)
+    }
 }

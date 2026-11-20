@@ -303,6 +303,7 @@ struct SelfHealOrchestrator: Service {
             type: .aiAdvice,
             summary: "Advisor \(v.action.rawValue): \(v.recommendation.rawValue) (\(String(format: "%.2f", v.confidence)))",
             detail: String(v.rationale.prefix(AutohealAdvisor.maxRationaleChars)),
+            afterState: v.structuredJSON,
             aiGenerated: v.source == .appleFM
         ))
     }
