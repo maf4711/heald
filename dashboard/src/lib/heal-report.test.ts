@@ -3,6 +3,11 @@ import assert from "node:assert/strict";
 import {
   validateHealReport,
   validateFinding,
+  applyHeals,
+  applyFindings,
+  clampLimit,
+  MAX_HEALS,
+  MAX_FINDINGS_PER_MACHINE,
   type HealReport,
   type Finding,
 } from "./heal-report.ts";
@@ -124,4 +129,76 @@ test("finding detail of 4001 chars is rejected", () => {
     ok: false,
     reason: "detail too long",
   });
+});
+
+// (c)
+test("(c) duplicate heal id (daemon retry) is stored once", () => {
+  const bucket = applyHeals([], [heal()]);
+  const again = applyHeals(bucket, [heal()]);
+  assert.equal(again.length, 1);
+});
+
+test("applyHeals sorts newest first and caps at MAX_HEALS", () => {
+  const sorted = applyHeals([], [
+    heal({ id: "old", ts: "2026-11-01T00:00:00Z" }),
+    heal({ id: "new", ts: "2026-11-21T00:00:00Z" }),
+    heal({ id: "mid", ts: "2026-11-10T00:00:00Z" }),
+  ]);
+  assert.deepEqual(sorted.map((h) => h.id), ["new", "mid", "old"]);
+
+  const many = Array.from({ length: MAX_HEALS + 10 }, (_, i) =>
+    heal({ id: `h${i}`, ts: new Date(Date.UTC(2026, 0, 1) + i * 1000).toISOString() }),
+  );
+  const capped = applyHeals([], many);
+  assert.equal(MAX_HEALS, 5000);
+  assert.equal(capped.length, 5000);
+  assert.equal(capped[0].id, `h${MAX_HEALS + 9}`);
+});
+
+test("applyHeals does not mutate its input bucket", () => {
+  const bucket = applyHeals([], [heal()]);
+  applyHeals(bucket, [heal({ id: "other" })]);
+  assert.equal(bucket.length, 1);
+});
+
+// (f)
+test("(f) clampLimit clamps to 1..500", () => {
+  assert.equal(clampLimit(0), 1);
+  assert.equal(clampLimit(10000), 500);
+  assert.equal(clampLimit(42), 42);
+  assert.equal(clampLimit(Number.NaN), 50);
+  assert.equal(clampLimit("7"), 7);
+  assert.equal(clampLimit(null), 50);
+  assert.equal(clampLimit("abc"), 50);
+});
+
+// (h)
+test("(h) open then fixed finding with same fingerprint -> 1 entry, status fixed", () => {
+  const open = applyFindings([], [finding({ status: "open" })]);
+  const fixed = applyFindings(open, [finding({ status: "fixed", lastSeen: "2026-11-21T10:00:00Z" })]);
+  assert.equal(fixed.length, 1);
+  assert.equal(fixed[0].status, "fixed");
+});
+
+test("applyFindings keys by (machineId, fingerprint)", () => {
+  const out = applyFindings([], [
+    finding({ machineId: "node-a" }),
+    finding({ machineId: "node-b" }),
+    finding({ machineId: "node-a", fingerprint: "panic:kernel" }),
+  ]);
+  assert.equal(out.length, 3);
+});
+
+test("applyFindings caps at MAX_FINDINGS_PER_MACHINE per machine, keeping newest", () => {
+  const many = Array.from({ length: MAX_FINDINGS_PER_MACHINE + 5 }, (_, i) =>
+    finding({
+      fingerprint: `fp${i}`,
+      lastSeen: new Date(Date.UTC(2026, 0, 1) + i * 1000).toISOString(),
+    }),
+  );
+  const out = applyFindings([finding({ machineId: "node-b" })], many);
+  assert.equal(MAX_FINDINGS_PER_MACHINE, 500);
+  assert.equal(out.filter((f) => f.machineId === "409C591A-node-a").length, 500);
+  assert.equal(out.filter((f) => f.machineId === "node-b").length, 1);
+  assert.ok(!out.some((f) => f.fingerprint === "fp0"));
 });

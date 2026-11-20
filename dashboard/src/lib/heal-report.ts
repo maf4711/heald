@@ -111,3 +111,39 @@ export function validateFinding(v: unknown): Validation {
   }
   return { ok: true };
 }
+
+const newestFirst = (a: string | undefined, b: string | undefined) =>
+  (a ?? "") < (b ?? "") ? 1 : (a ?? "") > (b ?? "") ? -1 : 0;
+
+/** Merge heals into a bucket: dedupe by id (latest copy wins), newest first, cap MAX_HEALS. */
+export function applyHeals(bucket: readonly HealReport[], incoming: readonly HealReport[]): HealReport[] {
+  const byId = new Map<string, HealReport>();
+  for (const h of bucket) byId.set(h.id, h);
+  for (const h of incoming) byId.set(h.id, h);
+  const out = Array.from(byId.values()).sort((a, b) => newestFirst(a.ts, b.ts));
+  if (out.length > MAX_HEALS) out.length = MAX_HEALS;
+  return out;
+}
+
+const findingKey = (f: Pick<Finding, "machineId" | "fingerprint">) => `${f.machineId}\u0000${f.fingerprint}`;
+
+/** Upsert findings by (machineId, fingerprint); newest lastSeen first; cap per machine. */
+export function applyFindings(bucket: readonly Finding[], incoming: readonly Finding[]): Finding[] {
+  const byKey = new Map<string, Finding>();
+  for (const f of bucket) byKey.set(findingKey(f), f);
+  for (const f of incoming) byKey.set(findingKey(f), f);
+  const sorted = Array.from(byKey.values()).sort((a, b) => newestFirst(a.lastSeen, b.lastSeen));
+  const perMachine = new Map<string, number>();
+  return sorted.filter((f) => {
+    const n = (perMachine.get(f.machineId) ?? 0) + 1;
+    perMachine.set(f.machineId, n);
+    return n <= MAX_FINDINGS_PER_MACHINE;
+  });
+}
+
+/** Parse a GET `limit` and clamp it to MIN_LIMIT..MAX_LIMIT (fallback when absent/invalid). */
+export function clampLimit(raw: unknown, fallback = 50): number {
+  const n = typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() ? Number(raw) : NaN;
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(MAX_LIMIT, Math.max(MIN_LIMIT, Math.trunc(n)));
+}
