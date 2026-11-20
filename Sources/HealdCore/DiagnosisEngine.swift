@@ -107,7 +107,7 @@ public struct DiagnosisEngine: Sendable {
 
     /// Cap to `n` UTF-16 units (JS `String.length`, as the dashboard validator counts),
     /// trimming to the last whole Character so emoji / combining marks are never split.
-    static func cap(_ s: String, _ n: Int) -> String {
+    public static func cap(_ s: String, _ n: Int) -> String {
         guard s.utf16.count > n else { return s }
         var out = ""
         var used = 0
