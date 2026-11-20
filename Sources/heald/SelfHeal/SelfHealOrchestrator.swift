@@ -224,8 +224,12 @@ struct SelfHealOrchestrator: Service {
             switch AutohealAdvisor.disposition(verdict, cooldown: cd) {
             case .run:
                 break // continue to the consent gate below
-            case .defer:
-                await state.markFired(key: key)
+            case .defer(let retryAfter):
+                // Re-arm after min(cooldown, 300 s) instead of the full cooldown.
+                await state.markFired(
+                    key: key,
+                    at: AutohealAdvisor.cooldownMark(now: Date(), cooldown: cd, retryAfter: retryAfter)
+                )
                 return
             case .skip:
                 await state.markFired(key: key)
@@ -336,8 +340,8 @@ actor HealCooldownState {
         return Date().timeIntervalSince(t) >= cooldown
     }
 
-    func markFired(key: String) {
-        last[key] = Date()
+    func markFired(key: String, at date: Date = Date()) {
+        last[key] = date
     }
 
     func snapshot() -> [String: String] {

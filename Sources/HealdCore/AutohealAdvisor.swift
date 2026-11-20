@@ -136,11 +136,19 @@ public enum AutohealAdvisor: Sendable {
         return verdict
     }
 
+    /// A deferred action is reconsidered after at most this many seconds.
+    public static let maxDeferRetry: TimeInterval = 300
+
+    /// Timestamp to record as "last fired" so that a `cooldown` check re-arms after `retryAfter`.
+    public static func cooldownMark(now: Date, cooldown: TimeInterval, retryAfter: TimeInterval) -> Date {
+        now.addingTimeInterval(-(cooldown - min(max(retryAfter, 0), cooldown)))
+    }
+
     /// Map a gated verdict to the orchestrator's next step for an action with `cooldown`.
     public static func disposition(_ verdict: AdvisorVerdict, cooldown: TimeInterval) -> AdvisorDisposition {
         switch verdict.recommendation {
         case .proceed: return .run
-        case .defer: return .defer(retryAfter: cooldown)
+        case .defer: return .defer(retryAfter: min(cooldown, maxDeferRetry))
         case .skip: return .skip
         }
     }

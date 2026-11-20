@@ -105,4 +105,27 @@ struct AdvisorPolicyTests {
         #expect(AdvisorDisposition.skip.consultsConsent == false)
         #expect(AdvisorDisposition.defer(retryAfter: 1).consultsConsent == false)
     }
+
+    // MARK: fix 4 — defer re-arms after min(cooldown, 300 s); skip keeps full cooldown
+
+    @Test func deferRetryIsCappedAtFiveMinutes() {
+        #expect(AutohealAdvisor.maxDeferRetry == 300)
+        #expect(AutohealAdvisor.disposition(fm(.diskCleanup, .defer), cooldown: 1800) == .defer(retryAfter: 300))
+        #expect(AutohealAdvisor.disposition(fm(.perfAutoheal, .defer), cooldown: 120) == .defer(retryAfter: 120))
+    }
+
+    @Test func deferMarkIsBackdatedSoCooldownExpiresAfterRetry() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let mark = AutohealAdvisor.cooldownMark(now: now, cooldown: 1800, retryAfter: 300)
+        #expect(mark == now.addingTimeInterval(-1500))
+        // canFire(key, cooldown) is `elapsed >= cooldown` → re-armed exactly 300 s later
+        #expect(now.addingTimeInterval(300).timeIntervalSince(mark) >= 1800)
+        #expect(now.addingTimeInterval(299).timeIntervalSince(mark) < 1800)
+    }
+
+    @Test func skipMarkIsNowSoFullCooldownApplies() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        #expect(AutohealAdvisor.cooldownMark(now: now, cooldown: 1800, retryAfter: 1800) == now)
+        #expect(AutohealAdvisor.cooldownMark(now: now, cooldown: 600, retryAfter: 900) == now)
+    }
 }
