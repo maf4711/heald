@@ -1,5 +1,6 @@
 import Foundation
 import HealdCore
+import OSLog
 import Synchronization
 
 /// What the ingest answered inside the outbox `send` closure (Sendable, read after `flush`).
@@ -18,6 +19,13 @@ struct FindingsSnapshot: Sendable {
     let data: Data
     let count: Int
     let revision: Int
+}
+
+/// Outcome of one ingest cycle: the last response, heals committed, findings actually carried.
+struct IngestPushResult {
+    let response: PushRecorder.Response?
+    let heals: Int
+    let findings: FindingsSnapshot?
 }
 
 extension CloudPusher {
@@ -40,6 +48,38 @@ extension CloudPusher {
             }
         guard let data = try? DiagnosisEngine.encoder().encode(findings) else { return nil }
         return FindingsSnapshot(data: data, count: findings.count, revision: engine.revision)
+    }
+
+    /// One POST per cycle: heals ride along through the outbox (cursor advances only on 200).
+    /// If the 8 s deadline fires after a 200 was recorded, the activity cursor still commits and
+    /// the heal batch is resent next cycle — harmless, the dashboard dedupes heals by id.
+    func pushWithHeals(
+        base: Data, findings: FindingsSnapshot?, url: String, bearer: String, cursorForLog: UInt64
+    ) async -> IngestPushResult {
+        let recorder = PushRecorder()
+        let heals = await HealReportOutbox.shared.flush(limit: HealReportOutbox.maxBatch) { batch in
+            do {
+                let body = try IngestPayload.body(base: base, heals: batch, findings: findings?.data)
+                let r = try await Self.post(body, url: url, bearer: bearer)
+                recorder.record(r)
+                return r.status == 200
+            } catch {
+                Logger.storage.warning("CloudPusher: push failed (cursor=\(cursorForLog)) — \(error)")
+                return false
+            }
+        }
+        guard let status = recorder.response?.status, IngestPayload.isPoison(status: status) else {
+            return IngestPushResult(response: recorder.response, heals: heals, findings: findings)
+        }
+        // Poison batch: the same body would fail forever. Retry once without heals/findings.
+        Logger.storage.warning("CloudPusher: ingest rejected push with \(status) — retrying without heals/findings")
+        guard let body = try? IngestPayload.body(base: base, heals: [], findings: nil),
+              let r = try? await Self.post(body, url: url, bearer: bearer), r.status == 200 else {
+            return IngestPushResult(response: recorder.response, heals: heals, findings: findings)
+        }
+        let skipped = await HealReportOutbox.shared.skip(limit: HealReportOutbox.maxBatch)
+        Logger.storage.warning("CloudPusher: skipped poison heal batch — \(skipped) report(s) dropped")
+        return IngestPushResult(response: r, heals: 0, findings: nil)
     }
 
     /// POST the body; returns status + response body (throws only on transport errors).

@@ -53,38 +53,11 @@ struct CloudPusher: Service {
             let findings = await findingsJSON(redact: policy.piiRedaction, gate: findingsGate)
             guard let base = try? JSONSerialization.data(withJSONObject: payload) else { continue }
 
-            // One POST per cycle: heals ride along through the outbox (cursor advances only on 200).
-            // If the 8 s deadline fires after a 200 was recorded, the activity cursor still commits and
-            // the heal batch is resent next cycle — harmless, the dashboard dedupes heals by id.
-            let url = apiURL
-            let cursorForLog = activityCursor
-            let recorder = PushRecorder()
-            var heals = await HealReportOutbox.shared.flush(limit: HealReportOutbox.maxBatch) { batch in
-                do {
-                    let body = try IngestPayload.body(base: base, heals: batch, findings: findings?.data)
-                    let r = try await Self.post(body, url: url, bearer: bearer)
-                    recorder.record(r)
-                    return r.status == 200
-                } catch {
-                    Logger.storage.warning("CloudPusher: push failed (cursor=\(cursorForLog)) — \(error)")
-                    return false
-                }
-            }
-            var findingsSent = findings
-            if let status = recorder.response?.status, IngestPayload.isPoison(status: status) {
-                // Poison batch: the same body would fail forever. Retry once without heals/findings.
-                Logger.storage.warning("CloudPusher: ingest rejected push with \(status) — retrying without heals/findings")
-                if let body = try? IngestPayload.body(base: base, heals: [], findings: nil),
-                   let r = try? await Self.post(body, url: url, bearer: bearer), r.status == 200 {
-                    recorder.record(r)
-                    let skipped = await HealReportOutbox.shared.skip(limit: HealReportOutbox.maxBatch)
-                    Logger.storage.warning("CloudPusher: skipped poison heal batch — \(skipped) report(s) dropped")
-                    heals = 0
-                    findingsSent = nil
-                }
-            }
-            guard let response = recorder.response, response.status == 200 else {
-                if let status = recorder.response?.status {
+            let sent = await pushWithHeals(
+                base: base, findings: findings, url: apiURL, bearer: bearer, cursorForLog: activityCursor
+            )
+            guard let response = sent.response, response.status == 200 else {
+                if let status = sent.response?.status {
                     Logger.storage.warning("CloudPusher: push failed HTTP \(status) (cursor=\(activityCursor))")
                 } else {
                     Logger.storage.debug("CloudPusher: push not confirmed (failed or timed out) — cursors unchanged")
@@ -95,15 +68,15 @@ struct CloudPusher: Service {
                 activityCursor = nextCursor
                 saveCursor(activityCursor)
             }
-            findingsGate.sent(revision: findingsSent?.revision)
+            findingsGate.sent(revision: sent.findings?.revision)
             let rejected = IngestPayload.rejected(in: response.body) ?? .init(heals: 0, findings: 0)
             if rejected.heals > 0 || rejected.findings > 0 {
                 Logger.storage.warning("CloudPusher: ingest rejected heals=\(rejected.heals) findings=\(rejected.findings)")
             }
             let n = (payload["events"] as? [[String: Any]])?.count ?? 0
-            let m = findingsSent?.count ?? 0
-            if n > 0 || heals > 0 || m > 0 {
-                Logger.storage.info("CloudPusher: push OK (\(n) events, heals=\(heals) findings=\(m) rejected=\(rejected.heals)/\(rejected.findings), cursor=\(activityCursor))")
+            let m = sent.findings?.count ?? 0
+            if n > 0 || sent.heals > 0 || m > 0 {
+                Logger.storage.info("CloudPusher: push OK (\(n) events, heals=\(sent.heals) findings=\(m) rejected=\(rejected.heals)/\(rejected.findings), cursor=\(activityCursor))")
             } else {
                 Logger.storage.debug("CloudPusher: push OK")
             }
