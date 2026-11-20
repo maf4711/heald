@@ -65,4 +65,39 @@ struct PerformanceAutohealTests {
             home: home
         ) == false)
     }
+
+    @Test func shouldFireWhenDegradedEnabledAndSelfHealOn() {
+        #expect(PerformanceAutoheal.shouldFire(degraded: true, enabled: true, selfHealEnabled: true) == true)
+    }
+
+    @Test func shouldNotFireWhenSelfHealDisabled() {
+        #expect(PerformanceAutoheal.shouldFire(degraded: true, enabled: true, selfHealEnabled: false) == false)
+    }
+
+    @Test func shouldNotFireWhenPerformanceAutohealDisabled() {
+        #expect(PerformanceAutoheal.shouldFire(degraded: true, enabled: false, selfHealEnabled: true) == false)
+    }
+
+    @Test func shouldNotFireWhenNotDegraded() {
+        #expect(PerformanceAutoheal.shouldFire(degraded: false, enabled: true, selfHealEnabled: true) == false)
+    }
+
+    /// policy.json without `performanceAutohealEnabled` (3.5.0 file) keeps perf autoheal on.
+    @Test func missingPolicyKeyIsEnabled() {
+        #expect(PerformanceAutoheal.isEnabled(nil) == true)
+    }
+
+    @Test func explicitTruePolicyKeyIsEnabled() {
+        #expect(PerformanceAutoheal.isEnabled(true) == true)
+    }
+
+    @Test func explicitFalsePolicyKeyIsDisabled() {
+        #expect(PerformanceAutoheal.isEnabled(false) == false)
+    }
+
+    @Test func policyKeyFalseBlocksFire() {
+        #expect(PerformanceAutoheal.shouldFire(
+            degraded: true, enabled: PerformanceAutoheal.isEnabled(false), selfHealEnabled: true
+        ) == false)
+    }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import HealdCore
 import OSLog
 
 /// Enterprise policy pack — `~/.heald/policy.json`
@@ -49,6 +50,8 @@ struct PolicyPack: Codable, Sendable {
     var preferDeviceToken: Bool = true
     /// When true/nil, daemon polls /api/update (unless HEALD_AUTO_UPDATE=0). Optional for old policy.json.
     var autoUpdateEnabled: Bool? = true
+    /// When true/nil, detect high load and apply boot-stampede heals.
+    var performanceAutohealEnabled: Bool? = true
 
     // Thresholds
     var diskFreePctCritical: Double = 8
@@ -212,6 +215,12 @@ struct PolicyPack: Codable, Sendable {
         case .auto: return true
         case .ask, .log: return false
         }
+    }
+
+    /// CPU / boot-stampede heals stay on even when bank consent=log.
+    /// Toggle off with `performanceAutohealEnabled: false`.
+    func allowsPerformanceRemediation() -> Bool {
+        selfHealEnabled && PerformanceAutoheal.isEnabled(performanceAutohealEnabled)
     }
 
     func allowsLog() -> Bool { true }
