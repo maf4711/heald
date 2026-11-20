@@ -1,0 +1,187 @@
+import Foundation
+
+/// Fixed catalog of self-heal actions the advisor may talk about.
+/// Raw values are the SelfHealOrchestrator cooldown keys.
+public enum HealAction: String, Codable, Sendable, CaseIterable {
+    case ramPurge = "ram_purge"
+    case diskCleanup = "disk_cleanup"
+    case deepTrim = "deep_trim"
+    case firewallOn = "firewall_on"
+    case filevaultWarn = "filevault_warn"
+    case proactiveHeal = "proactive_heal"
+    case notifyThermal = "notify_thermal"
+    case brewLight = "brew_light"
+    case perfAutoheal = "perf_autoheal"
+}
+
+public enum AdvisorRecommendation: String, Codable, Sendable, CaseIterable {
+    case proceed
+    case `defer`
+    case skip
+}
+
+public enum AdvisorSource: String, Codable, Sendable {
+    case appleFM
+    case rules
+}
+
+public struct AdvisorVerdict: Codable, Sendable, Equatable {
+    public var action: HealAction
+    public var recommendation: AdvisorRecommendation
+    /// 0...1
+    public var confidence: Double
+    public var rationale: String
+    public var source: AdvisorSource
+    public var latencyMs: Int
+
+    public init(
+        action: HealAction,
+        recommendation: AdvisorRecommendation,
+        confidence: Double,
+        rationale: String,
+        source: AdvisorSource,
+        latencyMs: Int
+    ) {
+        self.action = action
+        self.recommendation = recommendation
+        self.confidence = confidence
+        self.rationale = rationale
+        self.source = source
+        self.latencyMs = latencyMs
+    }
+
+    /// The rules decide: proceed with the triggered action, confidence 0.
+    public static func rulesFallback(
+        _ action: HealAction,
+        rationale: String = "rules fallback",
+        latencyMs: Int = 0
+    ) -> AdvisorVerdict {
+        AdvisorVerdict(
+            action: action,
+            recommendation: .proceed,
+            confidence: 0,
+            rationale: rationale,
+            source: .rules,
+            latencyMs: latencyMs
+        )
+    }
+}
+
+/// Apple FM as autoheal **advisor**, never executor. Pure policy — no model, no shell.
+/// The advisor may only downgrade a rule-triggered action (proceed → defer/skip);
+/// it can never start an action or bypass consent.
+public enum AutohealAdvisor: Sendable {
+    public static let maxInputChars = 2000
+    public static let maxRationaleChars = 280
+    public static let defaultTimeout: Duration = .seconds(5)
+
+    /// Combine the rule decision with the advisor verdict.
+    public static func gate(ruleAction: HealAction, verdict: AdvisorVerdict) -> AdvisorVerdict {
+        guard verdict.action == ruleAction else {
+            return .rulesFallback(
+                ruleAction,
+                rationale: "advisor named \(verdict.action.rawValue), ignored",
+                latencyMs: verdict.latencyMs
+            )
+        }
+        return verdict
+    }
+
+    private struct Wire: Decodable {
+        let action: String
+        let recommendation: String
+        let confidence: Double
+        let rationale: String
+    }
+
+    /// Map model JSON to a verdict. Anything outside the catalog → rules fallback.
+    public static func parse(_ text: String, ruleAction: HealAction) -> AdvisorVerdict {
+        let fallback = AdvisorVerdict.rulesFallback(ruleAction, rationale: "advisor answer unparseable")
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= maxInputChars,
+              let wire = try? JSONDecoder().decode(Wire.self, from: Data(trimmed.utf8)),
+              let action = HealAction(rawValue: wire.action),
+              let recommendation = AdvisorRecommendation(rawValue: wire.recommendation.lowercased()),
+              wire.confidence.isFinite
+        else { return fallback }
+
+        let rationale = wire.rationale.trimmingCharacters(in: .whitespacesAndNewlines)
+        return AdvisorVerdict(
+            action: action,
+            recommendation: recommendation,
+            confidence: min(max(wire.confidence, 0), 1),
+            rationale: String(rationale.prefix(maxRationaleChars)),
+            source: .appleFM,
+            latencyMs: 0
+        )
+    }
+
+    /// Ask the advisor with a hard deadline. `available == false` never calls `ask`.
+    public static func consult(
+        ruleAction: HealAction,
+        timeout: Duration = defaultTimeout,
+        available: Bool,
+        ask: @escaping @Sendable () async -> String?
+    ) async -> AdvisorVerdict {
+        guard available else {
+            return .rulesFallback(ruleAction, rationale: "Apple Intelligence unavailable")
+        }
+        let clock = ContinuousClock()
+        let start = clock.now
+        let answer = await withDeadline(timeout, ask)
+        let elapsed = clock.now - start
+        let ms = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
+
+        switch answer {
+        case .timedOut:
+            return .rulesFallback(ruleAction, rationale: "advisor timeout", latencyMs: ms)
+        case .value(nil):
+            return .rulesFallback(ruleAction, rationale: "advisor gave no answer", latencyMs: ms)
+        case .value(let text?):
+            var verdict = gate(ruleAction: ruleAction, verdict: parse(text, ruleAction: ruleAction))
+            verdict.latencyMs = ms
+            return verdict
+        }
+    }
+
+    public enum DeadlineResult<T: Sendable>: Sendable {
+        case value(T)
+        case timedOut
+    }
+
+    /// Run `work` but return no later than `timeout`, even if `work` ignores cancellation.
+    public static func withDeadline<T: Sendable>(
+        _ timeout: Duration,
+        _ work: @escaping @Sendable () async -> T
+    ) async -> DeadlineResult<T> {
+        let slot = OneShot<DeadlineResult<T>>()
+        let worker = Task { await slot.fulfil(.value(await work())) }
+        let timer = Task {
+            try? await Task.sleep(for: timeout)
+            await slot.fulfil(.timedOut)
+        }
+        let result = await slot.value()
+        worker.cancel()
+        timer.cancel()
+        return result
+    }
+}
+
+/// First `fulfil` wins; later ones are dropped.
+private actor OneShot<T: Sendable> {
+    private var result: T?
+    private var waiters: [CheckedContinuation<T, Never>] = []
+
+    func fulfil(_ value: T) {
+        guard result == nil else { return }
+        result = value
+        let pending = waiters
+        waiters = []
+        for w in pending { w.resume(returning: value) }
+    }
+
+    func value() async -> T {
+        if let result { return result }
+        return await withCheckedContinuation { waiters.append($0) }
+    }
+}
