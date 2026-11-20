@@ -50,7 +50,7 @@ public struct AdvisorVerdict: Codable, Sendable, Equatable {
         self.latencyMs = latencyMs
     }
 
-    /// The rules decide: proceed with the triggered action, confidence 0.
+    /// The rules decide: proceed with the triggered action, confidence 0. Rationale is truncated.
     public static func rulesFallback(
         _ action: HealAction,
         rationale: String = "rules fallback",
@@ -60,7 +60,7 @@ public struct AdvisorVerdict: Codable, Sendable, Equatable {
             action: action,
             recommendation: .proceed,
             confidence: 0,
-            rationale: rationale,
+            rationale: String(rationale.prefix(AutohealAdvisor.maxRationaleChars)),
             source: .rules,
             latencyMs: latencyMs
         )
@@ -74,12 +74,6 @@ extension AdvisorVerdict {
         enc.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         guard let data = try? enc.encode(self) else { return nil }
         return String(data: data, encoding: .utf8)
-    }
-
-    func truncated() -> AdvisorVerdict {
-        var v = self
-        v.rationale = String(v.rationale.prefix(AutohealAdvisor.maxRationaleChars))
-        return v
     }
 }
 
@@ -106,6 +100,8 @@ public enum AutohealAdvisor: Sendable {
     public static let minVetoConfidence = 0.6
     /// Security controls: the advisor is consulted and logged but can never downgrade them.
     public static let vetoProofActions: Set<HealAction> = [.firewallOn, .filevaultWarn]
+    /// A deferred action is reconsidered after at most this many seconds.
+    public static let maxDeferRetry: TimeInterval = 300
 
     /// Actions that free memory: under critical pressure an on-device model load would make it worse.
     public static let memoryReliefActions: Set<HealAction> = [.ramPurge, .perfAutoheal]
@@ -129,25 +125,21 @@ public enum AutohealAdvisor: Sendable {
                 latencyMs: verdict.latencyMs
             )
         }
-        if verdict.recommendation != .proceed, vetoProofActions.contains(ruleAction) {
-            return .rulesFallback(
-                ruleAction,
-                rationale: "veto-proof action, advisor \(verdict.recommendation.rawValue) ignored: \(verdict.rationale)",
-                latencyMs: verdict.latencyMs
-            ).truncated()
+        guard verdict.recommendation != .proceed else { return verdict }
+        let ignoredBecause: String
+        if vetoProofActions.contains(ruleAction) {
+            ignoredBecause = "veto-proof action, advisor"
+        } else if verdict.confidence < minVetoConfidence {
+            ignoredBecause = "low-confidence"
+        } else {
+            return verdict
         }
-        if verdict.recommendation != .proceed, verdict.confidence < minVetoConfidence {
-            return .rulesFallback(
-                ruleAction,
-                rationale: "low-confidence \(verdict.recommendation.rawValue) ignored: \(verdict.rationale)",
-                latencyMs: verdict.latencyMs
-            ).truncated()
-        }
-        return verdict
+        return .rulesFallback(
+            ruleAction,
+            rationale: "\(ignoredBecause) \(verdict.recommendation.rawValue) ignored: \(verdict.rationale)",
+            latencyMs: verdict.latencyMs
+        )
     }
-
-    /// A deferred action is reconsidered after at most this many seconds.
-    public static let maxDeferRetry: TimeInterval = 300
 
     /// Timestamp to record as "last fired" so that a `cooldown` check re-arms after `retryAfter`.
     public static func cooldownMark(now: Date, cooldown: TimeInterval, retryAfter: TimeInterval) -> Date {
