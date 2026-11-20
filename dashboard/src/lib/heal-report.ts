@@ -171,3 +171,42 @@ export function mergeHealBuckets(target: HealBuckets, data: unknown): HealBucket
     findings: findings.length ? applyFindings(target.findings, findings) : target.findings,
   };
 }
+
+type Counts = { accepted: number; rejected: number };
+
+export type IngestResult =
+  | { status: 400; json: { error: string } }
+  | {
+      status: 200;
+      json: { ok: true; heals: Counts; findings: Counts };
+      heals: HealReport[];
+      findings: Finding[];
+    };
+
+function partition<T>(items: unknown[], validate: (v: unknown) => Validation): { valid: T[]; counts: Counts } {
+  const valid = items.filter((v) => validate(v).ok) as T[];
+  return { valid, counts: { accepted: valid.length, rejected: items.length - valid.length } };
+}
+
+/**
+ * Validate the heal/finding part of a POST /api/ingest body. Invalid records
+ * are counted as rejected (batch still 200); a non-array `heals`/`findings`
+ * or a non-object body is a 400. `metrics`/`events` are handled by the route.
+ */
+export function ingestBody(body: unknown): IngestResult {
+  if (!isRecord(body)) return { status: 400, json: { error: "Invalid payload" } };
+  if (body.heals !== undefined && !Array.isArray(body.heals)) {
+    return { status: 400, json: { error: "heals must be an array" } };
+  }
+  if (body.findings !== undefined && !Array.isArray(body.findings)) {
+    return { status: 400, json: { error: "findings must be an array" } };
+  }
+  const heals = partition<HealReport>((body.heals as unknown[]) ?? [], validateHealReport);
+  const findings = partition<Finding>((body.findings as unknown[]) ?? [], validateFinding);
+  return {
+    status: 200,
+    json: { ok: true, heals: heals.counts, findings: findings.counts },
+    heals: heals.valid,
+    findings: findings.valid,
+  };
+}

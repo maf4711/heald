@@ -7,6 +7,7 @@ import {
   applyFindings,
   clampLimit,
   mergeHealBuckets,
+  ingestBody,
   MAX_HEALS,
   MAX_FINDINGS_PER_MACHINE,
   type HealReport,
@@ -241,4 +242,46 @@ test("mergeHealBuckets ignores missing/garbage snapshot data", () => {
   const junk = mergeHealBuckets(base, { heals: [{ nope: 1 }, "x"], findings: "bad" } as never);
   assert.equal(junk.heals.length, 1);
   assert.equal(junk.findings.length, 0);
+});
+
+// (d)
+test("(d) mixed batch of 3 heals with 1 invalid -> accepted 2, rejected 1, HTTP 200", () => {
+  const r = ingestBody({ heals: [heal({ id: "a" }), heal({ id: "b" }), { schema: "heald.heal_report/v1" }] });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json, {
+    ok: true,
+    heals: { accepted: 2, rejected: 1 },
+    findings: { accepted: 0, rejected: 0 },
+  });
+  assert.ok(r.status === 200 && r.heals.map((h) => h.id).join(",") === "a,b");
+});
+
+test("ingestBody answers the GOAL example payload", () => {
+  const r = ingestBody({ heals: [heal()], findings: [finding({ status: "fixed" })] });
+  assert.deepEqual(r.json, {
+    ok: true,
+    heals: { accepted: 1, rejected: 0 },
+    findings: { accepted: 1, rejected: 0 },
+  });
+  assert.ok(r.status === 200 && r.findings.length === 1);
+});
+
+test("ingestBody: heals / findings not an array -> 400", () => {
+  assert.equal(ingestBody({ heals: { id: "x" } }).status, 400);
+  assert.equal(ingestBody({ heals: "x" }).status, 400);
+  assert.equal(ingestBody({ findings: 1 }).status, 400);
+});
+
+test("ingestBody: non-object body -> 400", () => {
+  assert.equal(ingestBody(null).status, 400);
+  assert.equal(ingestBody([1]).status, 400);
+});
+
+test("ingestBody: metrics/events-only push still answers ok with zero counts", () => {
+  const r = ingestBody({ metrics: { machineId: "m" }, events: [] });
+  assert.deepEqual(r.json, {
+    ok: true,
+    heals: { accepted: 0, rejected: 0 },
+    findings: { accepted: 0, rejected: 0 },
+  });
 });
