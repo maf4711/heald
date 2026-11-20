@@ -44,6 +44,6 @@ struct ScannerRemediation {
     }
 
     private func isRunning(_ name: String) -> Bool {
-        ShellRunner.run("/usr/bin/pgrep", arguments: ["-x", name], timeoutSeconds: 3).succeeded
+        ShellRunner.run("/usr/bin/pgrep", arguments: ["-x", "--", name], timeoutSeconds: 3).succeeded
     }
 }

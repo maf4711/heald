@@ -215,17 +215,28 @@ struct SelfHealOrchestrator: Service {
     ) async {
         for healAction in [HealdCore.HealAction.appRestart, .dnsFlush] {
             let key = healAction.rawValue
-            // Leave requests queued while the cooldown runs instead of dropping them.
-            guard await state.canFire(key: key, cooldown: cooldowns[key] ?? 900) else { continue }
-            let requests = await FindingsStore.shared.drain(healAction)
-            guard !requests.isEmpty else { continue }
-            let reason = "\(key) for \(requests.map(\.target).joined(separator: ", "))"
-            await fire(state: state, key: key, reason: reason, policy: policy, memoryCritical: memoryCritical, budget: &budget) {
+            let targets = await FindingsStore.shared.peek(healAction)
+            guard !targets.isEmpty else { continue }
+            let reason = "\(key) for \(targets.joined(separator: ", "))"
+            // Drain inside the action: requests survive cooldown, advisor defer and consent=ask.
+            let outcome = await fire(state: state, key: key, reason: reason, policy: policy, memoryCritical: memoryCritical, budget: &budget) {
+                let requests = await FindingsStore.shared.drain(healAction)
                 await self.scannerRemediation.run(healAction, requests, activityLog: self.activityLog)
+            }
+            switch (ScannerQueue.disposition(after: outcome), outcome) {
+            case (.drop, _):
+                _ = await FindingsStore.shared.drain(healAction) // consent=log / advisor skip: never runs
+            case (.keep, .blockedAsk):
+                // Keep waiting for `heald approve`, but don't re-notify every 60 s cooldown.
+                let cd = cooldowns[key] ?? 900
+                await state.markFired(key: key, at: Date().addingTimeInterval(ScannerQueue.askRetryInterval - cd))
+            default:
+                break
             }
         }
     }
 
+    @discardableResult
     private func fire(
         state: HealCooldownState,
         key: String,
@@ -234,9 +245,9 @@ struct SelfHealOrchestrator: Service {
         memoryCritical: Bool = false,
         budget: inout AdvisorBudget,
         action: @escaping () async -> Void
-    ) async {
+    ) async -> GateOutcome {
         let cd = cooldowns[key] ?? 900
-        guard await state.canFire(key: key, cooldown: cd) else { return }
+        guard await state.canFire(key: key, cooldown: cd) else { return .cooldown }
 
         // Advisor (Apple FM, on-device): may only downgrade proceed → defer/skip. Never executes.
         if let healAction = HealdCore.HealAction(rawValue: key) {
@@ -257,7 +268,7 @@ struct SelfHealOrchestrator: Service {
                     key: key,
                     at: AutohealAdvisor.cooldownMark(now: Date(), cooldown: cd, retryAfter: retryAfter)
                 )
-                return
+                return .advisorDeferred
             case .skip:
                 await state.markFired(key: key)
                 try? await activityLog.log(event: ActivityEvent(
@@ -266,7 +277,7 @@ struct SelfHealOrchestrator: Service {
                     detail: verdict.rationale,
                     aiGenerated: verdict.source == .appleFM
                 ))
-                return
+                return .advisorSkipped
             }
         }
 
@@ -288,7 +299,7 @@ struct SelfHealOrchestrator: Service {
                     )
                 }
                 await state.markFired(key: key) // avoid spam
-                return
+                return policy.consent == .ask ? .blockedAsk : .blockedLog
             }
         }
 
@@ -314,6 +325,7 @@ struct SelfHealOrchestrator: Service {
             )
             await WebhookNotifier.shared.emit(title: key, text: reason, severity: "info")
         }
+        return .ran
     }
 
     /// Consult Apple FM within this tick's budget; rules fallback once the budget/breaker is spent.
