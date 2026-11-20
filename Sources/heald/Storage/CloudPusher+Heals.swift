@@ -2,32 +2,16 @@ import Foundation
 import HealdCore
 import Synchronization
 
-/// Set once by the outbox `send` closure when the POST returned 200.
-final class PushFlag: Sendable {
-    private let state = Mutex(false)
-    func set() { state.withLock { $0 = true } }
-    var isSet: Bool { state.withLock { $0 } }
-}
-
-/// Findings are sent when the engine revision moved, and re-sent every `resendEvery` pushes
-/// so a dashboard cold start re-learns the current picture.
-struct FindingsPushGate {
-    static let resendEvery = 30 // × 10 s push interval = 5 min
-    private var lastRevision: Int?
-    private var pushesSince = 0
-
-    func due(revision: Int) -> Bool {
-        lastRevision != revision || pushesSince >= Self.resendEvery
+/// What the ingest answered inside the outbox `send` closure (Sendable, read after `flush`).
+final class PushRecorder: Sendable {
+    struct Response: Sendable {
+        let status: Int
+        let body: Data
     }
 
-    mutating func sent(revision: Int?) {
-        if let revision {
-            lastRevision = revision
-            pushesSince = 0
-        } else {
-            pushesSince += 1
-        }
-    }
+    private let state = Mutex<Response?>(nil)
+    func record(_ r: Response) { state.withLock { $0 = r } }
+    var response: Response? { state.withLock { $0 } }
 }
 
 struct FindingsSnapshot: Sendable {
@@ -51,26 +35,27 @@ extension CloudPusher {
             .map { f -> Finding in
                 var f = f
                 f.machineId = id
-                if redact { f.sample = Self.capUTF16(PIIRedactor.redact(f.sample), Finding.maxSample) }
+                if redact { f.sample = DiagnosisEngine.cap(PIIRedactor.redact(f.sample), Finding.maxSample) }
                 return f
             }
         guard let data = try? DiagnosisEngine.encoder().encode(findings) else { return nil }
         return FindingsSnapshot(data: data, count: findings.count, revision: engine.revision)
     }
 
-    /// Ingest body: the metrics/events payload plus `heals` (always) and `findings` (when due).
-    static func body(base: Data, heals: [HealReport], findings: Data?) throws -> Data {
-        guard var dict = try JSONSerialization.jsonObject(with: base) as? [String: Any] else {
-            throw CocoaError(.coderReadCorrupt)
+    /// POST the body; returns status + response body (throws only on transport errors).
+    static func post(_ body: Data, url: String, bearer: String) async throws -> PushRecorder.Response {
+        guard let endpoint = URL(string: url) else { throw URLError(.badURL) }
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
+        if let deviceId = DeviceIdentity.load()?.deviceId {
+            request.setValue(deviceId, forHTTPHeaderField: "X-Heald-Device-Id")
         }
-        dict["heals"] = try JSONSerialization.jsonObject(with: DiagnosisEngine.encoder().encode(heals))
-        if let findings { dict["findings"] = try JSONSerialization.jsonObject(with: findings) }
-        return try JSONSerialization.data(withJSONObject: dict)
-    }
-
-    static func capUTF16(_ s: String, _ n: Int) -> String {
-        var out = s
-        while out.utf16.count > n { out.removeLast() }
-        return out
+        request.httpBody = body
+        // Shorter than the outbox flush deadline (8 s) so URLSession times out first.
+        request.timeoutInterval = IngestPayload.requestTimeout
+        let (data, response) = try await URLSession.shared.data(for: request)
+        return .init(status: (response as? HTTPURLResponse)?.statusCode ?? -1, body: data)
     }
 }

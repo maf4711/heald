@@ -54,33 +54,56 @@ struct CloudPusher: Service {
             guard let base = try? JSONSerialization.data(withJSONObject: payload) else { continue }
 
             // One POST per cycle: heals ride along through the outbox (cursor advances only on 200).
+            // If the 8 s deadline fires after a 200 was recorded, the activity cursor still commits and
+            // the heal batch is resent next cycle — harmless, the dashboard dedupes heals by id.
             let url = apiURL
             let cursorForLog = activityCursor
-            let pushed = PushFlag()
-            let heals = await HealReportOutbox.shared.flush(limit: HealReportOutbox.maxBatch) { batch in
+            let recorder = PushRecorder()
+            var heals = await HealReportOutbox.shared.flush(limit: HealReportOutbox.maxBatch) { batch in
                 do {
-                    let body = try Self.body(base: base, heals: batch, findings: findings?.data)
-                    try await Self.pushToCloud(body: body, url: url, bearer: bearer)
-                    pushed.set()
-                    return true
+                    let body = try IngestPayload.body(base: base, heals: batch, findings: findings?.data)
+                    let r = try await Self.post(body, url: url, bearer: bearer)
+                    recorder.record(r)
+                    return r.status == 200
                 } catch {
                     Logger.storage.warning("CloudPusher: push failed (cursor=\(cursorForLog)) — \(error)")
                     return false
                 }
             }
-            guard pushed.isSet else {
-                Logger.storage.debug("CloudPusher: push not confirmed (failed or timed out) — cursors unchanged")
+            var findingsSent = findings
+            if let status = recorder.response?.status, IngestPayload.isPoison(status: status) {
+                // Poison batch: the same body would fail forever. Retry once without heals/findings.
+                Logger.storage.warning("CloudPusher: ingest rejected push with \(status) — retrying without heals/findings")
+                if let body = try? IngestPayload.body(base: base, heals: [], findings: nil),
+                   let r = try? await Self.post(body, url: url, bearer: bearer), r.status == 200 {
+                    recorder.record(r)
+                    let skipped = await HealReportOutbox.shared.skip(limit: HealReportOutbox.maxBatch)
+                    Logger.storage.warning("CloudPusher: skipped poison heal batch — \(skipped) report(s) dropped")
+                    heals = 0
+                    findingsSent = nil
+                }
+            }
+            guard let response = recorder.response, response.status == 200 else {
+                if let status = recorder.response?.status {
+                    Logger.storage.warning("CloudPusher: push failed HTTP \(status) (cursor=\(activityCursor))")
+                } else {
+                    Logger.storage.debug("CloudPusher: push not confirmed (failed or timed out) — cursors unchanged")
+                }
                 continue
             }
             if nextCursor != activityCursor {
                 activityCursor = nextCursor
                 saveCursor(activityCursor)
             }
-            findingsGate.sent(revision: findings?.revision)
+            findingsGate.sent(revision: findingsSent?.revision)
+            let rejected = IngestPayload.rejected(in: response.body) ?? .init(heals: 0, findings: 0)
+            if rejected.heals > 0 || rejected.findings > 0 {
+                Logger.storage.warning("CloudPusher: ingest rejected heals=\(rejected.heals) findings=\(rejected.findings)")
+            }
             let n = (payload["events"] as? [[String: Any]])?.count ?? 0
-            let m = findings?.count ?? 0
+            let m = findingsSent?.count ?? 0
             if n > 0 || heals > 0 || m > 0 {
-                Logger.storage.info("CloudPusher: push OK (\(n) events, heals=\(heals) findings=\(m), cursor=\(activityCursor))")
+                Logger.storage.info("CloudPusher: push OK (\(n) events, heals=\(heals) findings=\(m) rejected=\(rejected.heals)/\(rejected.findings), cursor=\(activityCursor))")
             } else {
                 Logger.storage.debug("CloudPusher: push OK")
             }
@@ -341,25 +364,6 @@ struct CloudPusher: Service {
         return ["metrics": metrics, "events": eventDicts]
     }
 
-    private static func pushToCloud(body data: Data, url: String, bearer: String) async throws {
-        guard let endpoint = URL(string: url) else { throw CloudError.pushFailed(statusCode: -1) }
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
-        if let deviceId = DeviceIdentity.load()?.deviceId {
-            request.setValue(deviceId, forHTTPHeaderField: "X-Heald-Device-Id")
-        }
-        request.httpBody = data
-        request.timeoutInterval = 10
-
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-            throw CloudError.pushFailed(statusCode: code)
-        }
-    }
-
     private func processEntryDict(_ p: ProcessEntry) -> [String: Any] {
         ["pid": p.pid, "name": p.name, "cpuPercent": p.cpuPercent,
          "ramMB": round(Double(p.ramBytes) / 1_048_576 * 10) / 10, "system": p.isSystem]
@@ -389,10 +393,6 @@ struct CloudPusher: Service {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try? String(offset).write(to: cursorURL, atomically: true, encoding: .utf8)
     }
-}
-
-private enum CloudError: Error {
-    case pushFailed(statusCode: Int)
 }
 
 private func machineName() -> String {
