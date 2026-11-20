@@ -8,6 +8,7 @@ import OSLog
 struct SelfHealOrchestrator: Service {
     let store: MetricsStore
     let activityLog: ActivityLog
+    let ai: AppleIntelligenceClient
 
     private let pollSeconds: Int = 45
     private let autofix = AutofixEngine()
@@ -41,11 +42,12 @@ struct SelfHealOrchestrator: Service {
         try await Task.sleep(for: .seconds(180))
         let policy0 = await PolicyStore.shared.current()
         if policy0.selfHealEnabled {
-            await fire(state: state, key: "proactive_heal", reason: "boot hygiene", policy: policy0) {
+            var bootBudget = AdvisorBudget()
+            await fire(state: state, key: "proactive_heal", reason: "boot hygiene", policy: policy0, budget: &bootBudget) {
                 await self.proactive.run(activityLog: self.activityLog)
             }
             if PerformanceAutoheal.isEnabled(policy0.performanceAutohealEnabled) {
-                await fire(state: state, key: "perf_autoheal", reason: "boot settle", policy: policy0) {
+                await fire(state: state, key: "perf_autoheal", reason: "boot settle", policy: policy0, budget: &bootBudget) {
                     _ = await self.perf.run(
                         activityLog: self.activityLog,
                         cpuOverall: 1,
@@ -81,6 +83,8 @@ struct SelfHealOrchestrator: Service {
         let thermal = await store.thermal
         let security = await store.security
         let cpu = await store.cpu
+        let memoryCritical = AutohealAdvisor.isMemoryCritical(pressureLevel: ram.pressureLevel)
+        var budget = AdvisorBudget()
 
         // Battery + network every ~3 min
         if tick % 4 == 0 {
@@ -104,7 +108,7 @@ struct SelfHealOrchestrator: Service {
             enabled: PerformanceAutoheal.isEnabled(policy.performanceAutohealEnabled),
             selfHealEnabled: policy.selfHealEnabled
         ) {
-            await fire(state: state, key: "perf_autoheal", reason: degraded ? "cpu/load degraded" : "boot settle", policy: policy) {
+            await fire(state: state, key: "perf_autoheal", reason: degraded ? "cpu/load degraded" : "boot settle", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
                 _ = await self.perf.run(
                     activityLog: self.activityLog,
                     cpuOverall: cpu.overall,
@@ -116,11 +120,11 @@ struct SelfHealOrchestrator: Service {
         // 1) RAM
         if policy.ramPurgeEnabled, ram.timestamp != .distantPast,
            ram.pressureLevel >= policy.ramPressureMin {
-            await fire(state: state, key: "ram_purge", reason: "RAM pressure=\(ram.pressureLevel)", policy: policy) {
+            await fire(state: state, key: "ram_purge", reason: "RAM pressure=\(ram.pressureLevel)", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
                 await self.ramPurge.purge(activityLog: self.activityLog)
             }
         } else if policy.ramPurgeEnabled, ram.timestamp != .distantPast, ram.swapUsed > 1_073_741_824 {
-            await fire(state: state, key: "ram_purge", reason: "swap>\(Int(ram.swapUsed / 1_048_576))MB", policy: policy) {
+            await fire(state: state, key: "ram_purge", reason: "swap>\(Int(ram.swapUsed / 1_048_576))MB", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
                 await self.ramPurge.purge(activityLog: self.activityLog)
             }
         }
@@ -131,7 +135,7 @@ struct SelfHealOrchestrator: Service {
            root.totalBytes > 0 {
             let freePct = Double(root.freeBytes) / Double(root.totalBytes) * 100
             if freePct < policy.diskFreePctWarn {
-                await fire(state: state, key: "disk_cleanup", reason: String(format: "disk free %.0f%%", freePct), policy: policy) {
+                await fire(state: state, key: "disk_cleanup", reason: String(format: "disk free %.0f%%", freePct), policy: policy, memoryCritical: memoryCritical, budget: &budget) {
                     try? await self.cleaner.cleanCaches(activityLog: self.activityLog)
                     try? await self.cleaner.emptyTrash(activityLog: self.activityLog)
                     try? await self.cleaner.cleanXcodeDerivedData(activityLog: self.activityLog)
@@ -139,7 +143,7 @@ struct SelfHealOrchestrator: Service {
                 }
             }
             if freePct < policy.diskFreePctCritical {
-                await fire(state: state, key: "deep_trim", reason: String(format: "disk critical %.0f%%", freePct), policy: policy) {
+                await fire(state: state, key: "deep_trim", reason: String(format: "disk critical %.0f%%", freePct), policy: policy, memoryCritical: memoryCritical, budget: &budget) {
                     await self.deepClean.run(activityLog: self.activityLog)
                     await self.autofix.brewCleanupLight(activityLog: self.activityLog)
                 }
@@ -150,7 +154,7 @@ struct SelfHealOrchestrator: Service {
         if thermal.timestamp != .distantPast {
             switch thermal.thermalState {
             case .serious, .critical:
-                await fire(state: state, key: "notify_thermal", reason: "thermal \(thermal.thermalState.rawValue)", policy: policy) {
+                await fire(state: state, key: "notify_thermal", reason: "thermal \(thermal.thermalState.rawValue)", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
                     NotificationService.sendNotification(
                         title: "heald",
                         message: "Mac thermal \(thermal.thermalState.rawValue) — self-heal free RAM"
@@ -166,7 +170,7 @@ struct SelfHealOrchestrator: Service {
 
         // 4) Firewall
         if policy.firewallEnforce, security.timestamp != .distantPast, !security.firewallEnabled {
-            await fire(state: state, key: "firewall_on", reason: "firewall disabled", policy: policy) {
+            await fire(state: state, key: "firewall_on", reason: "firewall disabled", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
                 await self.autofix.enableFirewall(activityLog: self.activityLog)
                 await WebhookNotifier.shared.emit(title: "Firewall", text: "Enforced enable", severity: "warning")
             }
@@ -174,7 +178,7 @@ struct SelfHealOrchestrator: Service {
 
         // 5) FileVault warn only
         if policy.fileVaultWarn, security.timestamp != .distantPast, !security.fileVaultEnabled {
-            await fire(state: state, key: "filevault_warn", reason: "FileVault off", policy: policy) {
+            await fire(state: state, key: "filevault_warn", reason: "FileVault off", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
                 NotificationService.sendNotification(
                     title: "heald compliance",
                     message: "FileVault is disabled — enable in System Settings"
@@ -188,7 +192,7 @@ struct SelfHealOrchestrator: Service {
         }
 
         // 6) Proactive
-        await fire(state: state, key: "proactive_heal", reason: "scheduled proactive", policy: policy) {
+        await fire(state: state, key: "proactive_heal", reason: "scheduled proactive", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
             await self.proactive.run(activityLog: self.activityLog)
         }
 
@@ -200,10 +204,44 @@ struct SelfHealOrchestrator: Service {
         key: String,
         reason: String,
         policy: PolicyPack,
+        memoryCritical: Bool = false,
+        budget: inout AdvisorBudget,
         action: @escaping () async -> Void
     ) async {
         let cd = cooldowns[key] ?? 900
         guard await state.canFire(key: key, cooldown: cd) else { return }
+
+        // Advisor (Apple FM, on-device): may only downgrade proceed → defer/skip. Never executes.
+        if let healAction = HealdCore.HealAction(rawValue: key) {
+            let verdict = await advise(
+                healAction,
+                reason: reason,
+                context: "cooldown=\(Int(cd))s consent=\(policy.consent.rawValue)",
+                memoryCritical: memoryCritical,
+                budget: &budget
+            )
+            await logAdvice(verdict)
+            switch AutohealAdvisor.disposition(verdict, cooldown: cd) {
+            case .run:
+                break // continue to the consent gate below
+            case .defer(let retryAfter):
+                // Re-arm after min(cooldown, 300 s) instead of the full cooldown.
+                await state.markFired(
+                    key: key,
+                    at: AutohealAdvisor.cooldownMark(now: Date(), cooldown: cd, retryAfter: retryAfter)
+                )
+                return
+            case .skip:
+                await state.markFired(key: key)
+                try? await activityLog.log(event: ActivityEvent(
+                    type: .healingAttempt,
+                    summary: "Self-heal SKIPPED by advisor: \(key)",
+                    detail: verdict.rationale,
+                    aiGenerated: verdict.source == .appleFM
+                ))
+                return
+            }
+        }
 
         // Consent: log-only never remediates; ask needs `heald approve <key>` (or consent=auto)
         if !policy.allowsRemediation() {
@@ -251,6 +289,40 @@ struct SelfHealOrchestrator: Service {
         }
     }
 
+    /// Consult Apple FM within this tick's budget; rules fallback once the budget/breaker is spent.
+    private func advise(
+        _ healAction: HealdCore.HealAction,
+        reason: String,
+        context: String,
+        memoryCritical: Bool,
+        budget: inout AdvisorBudget
+    ) async -> AdvisorVerdict {
+        guard let timeout = budget.nextTimeout() else {
+            return .rulesFallback(healAction, rationale: "advisor budget/circuit open this tick")
+        }
+        let ai = self.ai
+        let verdict = await AutohealAdvisor.consult(
+            ruleAction: healAction,
+            timeout: timeout,
+            available: await ai.isAvailable,
+            memoryCritical: memoryCritical
+        ) {
+            await ai.adviseHeal(action: healAction.rawValue, reason: reason, context: context)
+        }
+        budget.record(verdict)
+        return verdict
+    }
+
+    private func logAdvice(_ v: AdvisorVerdict) async {
+        try? await activityLog.log(event: ActivityEvent(
+            type: .aiAdvice,
+            summary: "Advisor \(v.action.rawValue): \(v.recommendation.rawValue) (\(String(format: "%.2f", v.confidence)))",
+            detail: String(v.rationale.prefix(AutohealAdvisor.maxRationaleChars)),
+            afterState: v.structuredJSON,
+            aiGenerated: v.source == .appleFM
+        ))
+    }
+
     private func writeStatus(
         state: HealCooldownState,
         ram: RAMSnapshot,
@@ -293,8 +365,8 @@ actor HealCooldownState {
         return Date().timeIntervalSince(t) >= cooldown
     }
 
-    func markFired(key: String) {
-        last[key] = Date()
+    func markFired(key: String, at date: Date = Date()) {
+        last[key] = date
     }
 
     func snapshot() -> [String: String] {

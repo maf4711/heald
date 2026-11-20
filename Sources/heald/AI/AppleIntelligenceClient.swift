@@ -1,6 +1,7 @@
 import Foundation
 import OSLog
 import FoundationModels
+import HealdCore
 
 /// On-device AI via Apple Intelligence (FoundationModels) — same backend as meisterSiri.
 /// No Ollama, no network model server. Falls back to rules when unavailable.
@@ -70,23 +71,43 @@ actor AppleIntelligenceClient {
         return await query(prompt: prompt)
     }
 
-    /// Suggest a non-interactive shell fix for a failed maintenance module.
-    func selfHealAnalyze(moduleName: String, error: String) async -> String? {
+    /// Advisor verdict for a rule-triggered self-heal action, as JSON for `AutohealAdvisor.parse`.
+    /// Guided generation restricts action/recommendation to the fixed catalog. Advice only.
+    func adviseHeal(action: String, reason: String, context: String) async -> String? {
         guard isAvailable else { return nil }
 
-        let prompt = """
-            Du bist ein macOS System-Administrator. Ein Wartungsmodul ist fehlgeschlagen.
-
-            MODUL: \(moduleName)
-            FEHLER: \(error)
-
-            SYSTEM: macOS Apple Silicon, Homebrew, Swift daemon (LaunchAgent), Apple Intelligence on-device
-
-            Liefere NUR den Fix-Befehl (Shell-Commands, eine pro Zeile).
-            Keine Erklaerungen. Kein Markdown. Muss ohne Interaktion laufen.
-            Wenn kein Fix moeglich: nur NOFIX
+        let instructions = """
+            You advise a macOS self-heal daemon. The rules already decided to run one action.
+            You may only confirm it (proceed), postpone it (defer) or advise against it (skip).
+            Never suggest commands. Answer for exactly the action given.
             """
+        let prompt = String("""
+            ACTION: \(action)
+            TRIGGER: \(reason)
+            CONTEXT: \(context)
+            """.prefix(AutohealAdvisor.maxInputChars))
 
+        do {
+            let session = LanguageModelSession(model: SystemLanguageModel.default, instructions: instructions)
+            let response = try await session.respond(to: prompt, generating: HealAdvice.self)
+            let data = try JSONEncoder().encode(response.content)
+            return String(data: data, encoding: .utf8)
+        } catch {
+            Logger.ai.error("Apple Intelligence advise failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// One-sentence plain-text diagnosis of a failed maintenance module. Logged only, never executed.
+    func diagnoseFailure(moduleName: String, error: String) async -> String? {
+        guard isAvailable else { return nil }
+        let prompt = String("""
+            A macOS maintenance module failed. In at most two short sentences, explain the likely cause.
+            Do not output shell commands, code or markdown.
+
+            MODULE: \(moduleName)
+            ERROR: \(error)
+            """.prefix(AutohealAdvisor.maxInputChars))
         return await query(prompt: prompt)
     }
 
@@ -109,4 +130,17 @@ enum AIDecision: Sendable, Equatable {
     case wait
     case ignore
     case fallbackToRules
+}
+
+/// Guided-generation DTO for `adviseHeal`; encoded to the JSON that `AutohealAdvisor.parse` reads.
+@Generable(description: "Advice on one self-heal action that the rules already triggered")
+struct HealAdvice: Codable {
+    @Guide(description: "The action being advised on, exactly as given", .anyOf(HealdCore.HealAction.allCases.map(\.rawValue)))
+    var action: String
+    @Guide(description: "proceed, defer or skip", .anyOf(AdvisorRecommendation.allCases.map(\.rawValue)))
+    var recommendation: String
+    @Guide(description: "Confidence between 0 and 1, prefer low if unsure", .range(0.0...1.0))
+    var confidence: Double
+    @Guide(description: "Very short reason in English, max 280 characters")
+    var rationale: String
 }
