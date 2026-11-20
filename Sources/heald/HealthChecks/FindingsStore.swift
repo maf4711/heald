@@ -7,6 +7,9 @@ struct RemediationRequest: Sendable {
     let action: HealdCore.HealAction
     let target: String
     var fingerprints: Set<String>
+
+    /// Queue key: one pending request per (action, target).
+    static func key(_ action: HealdCore.HealAction, _ target: String) -> String { "\(action.rawValue):\(target)" }
 }
 
 /// Owns the device's `DiagnosisEngine` (persisted to ~/.heald/data/findings.json) and the queue of
@@ -46,7 +49,7 @@ actor FindingsStore {
     func snapshot() -> DiagnosisEngine { loaded() }
 
     func request(_ action: HealdCore.HealAction, target: String, fingerprint: String) {
-        let key = "\(action.rawValue):\(target)"
+        let key = RemediationRequest.key(action, target)
         if pending[key] == nil {
             guard pending.count < Self.maxPending else { return }
             pending[key] = RemediationRequest(action: action, target: target, fingerprints: [])
@@ -61,7 +64,7 @@ actor FindingsStore {
 
     func drain(_ action: HealdCore.HealAction) -> [RemediationRequest] {
         let out = pending.values.filter { $0.action == action }.sorted { $0.target < $1.target }
-        for r in out { pending["\(r.action.rawValue):\(r.target)"] = nil }
+        for r in out { pending[RemediationRequest.key(r.action, r.target)] = nil }
         return out
     }
 
