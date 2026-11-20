@@ -1,4 +1,5 @@
 import Foundation
+import HealdCore
 import OSLog
 
 /// Enterprise policy pack — `~/.heald/policy.json`
@@ -220,8 +221,7 @@ struct PolicyPack: Codable, Sendable {
     /// Toggle off with `performanceAutohealEnabled: false`.
     func allowsPerformanceRemediation() -> Bool {
         guard selfHealEnabled else { return false }
-        if performanceAutohealEnabled == false { return false }
-        return true
+        return PerformanceAutoheal.isEnabled(performanceAutohealEnabled)
     }
 
     func allowsLog() -> Bool { true }

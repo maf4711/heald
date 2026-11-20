@@ -44,7 +44,7 @@ struct SelfHealOrchestrator: Service {
             await fire(state: state, key: "proactive_heal", reason: "boot hygiene", policy: policy0) {
                 await self.proactive.run(activityLog: self.activityLog)
             }
-            if policy0.performanceAutohealEnabled ?? true {
+            if PerformanceAutoheal.isEnabled(policy0.performanceAutohealEnabled) {
                 await fire(state: state, key: "perf_autoheal", reason: "boot settle", policy: policy0) {
                     _ = await self.perf.run(
                         activityLog: self.activityLog,
@@ -101,7 +101,7 @@ struct SelfHealOrchestrator: Service {
         )
         if PerformanceAutoheal.shouldFire(
             degraded: degraded || tick <= 1,
-            enabled: policy.performanceAutohealEnabled ?? true,
+            enabled: PerformanceAutoheal.isEnabled(policy.performanceAutohealEnabled),
             selfHealEnabled: policy.selfHealEnabled
         ) {
             await fire(state: state, key: "perf_autoheal", reason: degraded ? "cpu/load degraded" : "boot settle", policy: policy) {

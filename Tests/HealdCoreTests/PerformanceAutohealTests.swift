@@ -81,12 +81,22 @@ struct PerformanceAutohealTests {
         #expect(PerformanceAutoheal.shouldFire(degraded: false, enabled: true, selfHealEnabled: true) == false)
     }
 
-    /// policy.json without `performanceAutohealEnabled` (nil) keeps perf autoheal on;
-    /// callers pass `policy.performanceAutohealEnabled ?? true`.
-    @Test func missingPolicyKeyMeansEnabled() {
-        let missingKey: Bool? = nil
-        #expect(PerformanceAutoheal.shouldFire(degraded: true, enabled: missingKey ?? true, selfHealEnabled: true) == true)
-        let explicitOff: Bool? = false
-        #expect(PerformanceAutoheal.shouldFire(degraded: true, enabled: explicitOff ?? true, selfHealEnabled: true) == false)
+    /// policy.json without `performanceAutohealEnabled` (3.5.0 file) keeps perf autoheal on.
+    @Test func missingPolicyKeyIsEnabled() {
+        #expect(PerformanceAutoheal.isEnabled(nil) == true)
+    }
+
+    @Test func explicitTruePolicyKeyIsEnabled() {
+        #expect(PerformanceAutoheal.isEnabled(true) == true)
+    }
+
+    @Test func explicitFalsePolicyKeyIsDisabled() {
+        #expect(PerformanceAutoheal.isEnabled(false) == false)
+    }
+
+    @Test func policyKeyFalseBlocksFire() {
+        #expect(PerformanceAutoheal.shouldFire(
+            degraded: true, enabled: PerformanceAutoheal.isEnabled(false), selfHealEnabled: true
+        ) == false)
     }
 }

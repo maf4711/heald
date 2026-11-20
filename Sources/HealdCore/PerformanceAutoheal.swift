@@ -23,8 +23,13 @@ public enum PerformanceAutoheal: Sendable {
         return false
     }
 
+    /// Policy key `performanceAutohealEnabled`: nil (pre-3.5.3 policy.json) or true → on; only explicit false turns it off.
+    public static func isEnabled(_ policyValue: Bool?) -> Bool {
+        policyValue ?? true
+    }
+
     /// Whether the `perf_autoheal` stampede heal should fire this tick.
-    /// `enabled` is the policy key `performanceAutohealEnabled` (callers pass `?? true`).
+    /// `enabled` is `isEnabled(policy.performanceAutohealEnabled)`.
     public static func shouldFire(degraded: Bool, enabled: Bool, selfHealEnabled: Bool) -> Bool {
         degraded && enabled && selfHealEnabled
     }
