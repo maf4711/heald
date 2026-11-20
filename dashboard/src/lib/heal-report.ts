@@ -91,7 +91,10 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 type Check = string | null; // reason, or null when the field is fine
 
-function str(v: unknown, field: string, max: number, required = false, nullable = false): Check {
+/** required: absent is "missing"; nullable: an explicit null is allowed. */
+type Rule = { required?: boolean; nullable?: boolean };
+
+function str(v: unknown, field: string, max: number, { required = false, nullable = false }: Rule = {}): Check {
   if (v === undefined || v === null) {
     if (required) return `missing ${field}`;
     return v === null && !nullable ? `invalid ${field}` : null;
@@ -105,36 +108,41 @@ function num(v: unknown, field: string): Check {
   return v === undefined || (typeof v === "number" && Number.isFinite(v)) ? null : `invalid ${field}`;
 }
 
-function oneOf(v: unknown, field: string, allowed: readonly string[], required = false): Check {
-  if (v === undefined || v === null) return required ? `missing ${field}` : null;
+/** Enum field; `emptyIsMissing` treats "" like an absent value. */
+function oneOf(
+  v: unknown,
+  field: string,
+  allowed: readonly string[],
+  { required = false, emptyIsMissing = false } = {},
+): Check {
+  if (v === undefined || v === null || (emptyIsMissing && v === "")) return required ? `missing ${field}` : null;
   return allowed.includes(v as string) ? null : `invalid ${field}`;
 }
 
-function iso(v: unknown, field: string, now: number, required = false, futureCheck = false): Check {
+/** ISO date ≤ MAX_ISO_CHARS; with `noFuture`, more than MAX_FUTURE_MS ahead of `now` is rejected. */
+function iso(v: unknown, field: string, now: number, { required = false, noFuture = false } = {}): Check {
   if (v === undefined || v === null) return required ? `missing ${field}` : null;
   if (typeof v !== "string" || v.length > MAX_ISO_CHARS) return `invalid ${field}`;
   const t = Date.parse(v);
   if (!Number.isFinite(t)) return `invalid ${field}`;
-  return futureCheck && t > now + MAX_FUTURE_MS ? `${field} in the future` : null;
+  return noFuture && t > now + MAX_FUTURE_MS ? `${field} in the future` : null;
 }
+
+const REQUIRED = { required: true };
+const REQUIRED_NON_EMPTY = { required: true, emptyIsMissing: true };
+const NULLABLE: Rule = { nullable: true };
 
 function first(checks: Check[]): Validation {
   const reason = checks.find((c) => c !== null);
   return reason ? { ok: false, reason } : { ok: true };
 }
 
-function detail(v: unknown): Check {
-  if (v === undefined) return null;
-  if (typeof v !== "string") return "invalid detail";
-  return v.length > MAX_DETAIL_CHARS ? "detail too long" : null;
-}
-
 function advisorCheck(v: unknown): Check {
   if (v === undefined || v === null) return "missing advisor";
   if (!isRecord(v)) return "invalid advisor";
   const r = first([
-    oneOf(v.source, "advisor.source", ADVISOR_SOURCES, true),
-    oneOf(v.recommendation, "advisor.recommendation", RECOMMENDATIONS, true),
+    oneOf(v.source, "advisor.source", ADVISOR_SOURCES, REQUIRED),
+    oneOf(v.recommendation, "advisor.recommendation", RECOMMENDATIONS, REQUIRED),
     num(v.confidence, "advisor.confidence"),
     num(v.latencyMs, "advisor.latencyMs"),
     str(v.rationale, "advisor.rationale", MAX_TEXT_CHARS),
@@ -146,18 +154,17 @@ export function validateHealReport(v: unknown, now: number = Date.now()): Valida
   if (!isRecord(v)) return { ok: false, reason: "not an object" };
   if (v.schema !== HEAL_SCHEMA) return { ok: false, reason: "unknown schema" };
   return first([
-    str(v.id, "id", MAX_ID_CHARS, true),
-    str(v.machineId, "machineId", MAX_ID_CHARS, true),
-    str(v.action, "action", MAX_SHORT_CHARS, true),
-    v.outcome === undefined || v.outcome === null || v.outcome === "" ? "missing outcome" : null,
-    oneOf(v.outcome, "outcome", HEAL_OUTCOMES),
-    iso(v.ts, "ts", now, true, true),
+    str(v.id, "id", MAX_ID_CHARS, REQUIRED),
+    str(v.machineId, "machineId", MAX_ID_CHARS, REQUIRED),
+    str(v.action, "action", MAX_SHORT_CHARS, REQUIRED),
+    oneOf(v.outcome, "outcome", HEAL_OUTCOMES, REQUIRED_NON_EMPTY),
+    iso(v.ts, "ts", now, { required: true, noFuture: true }),
     str(v.healdVersion, "healdVersion", MAX_SHORT_CHARS),
     str(v.trigger, "trigger", MAX_TEXT_CHARS),
     oneOf(v.consent, "consent", CONSENTS),
     num(v.durationMs, "durationMs"),
-    str(v.findingFingerprint, "findingFingerprint", MAX_ID_CHARS, false, true),
-    detail(v.detail),
+    str(v.findingFingerprint, "findingFingerprint", MAX_ID_CHARS, NULLABLE),
+    str(v.detail, "detail", MAX_DETAIL_CHARS),
     advisorCheck(v.advisor),
   ]);
 }
@@ -173,21 +180,20 @@ export function validateFinding(v: unknown, now: number = Date.now()): Validatio
   if (!isRecord(v)) return { ok: false, reason: "not an object" };
   if (v.schema !== FINDING_SCHEMA) return { ok: false, reason: "unknown schema" };
   return first([
-    str(v.fingerprint, "fingerprint", MAX_ID_CHARS, true),
-    str(v.machineId, "machineId", MAX_ID_CHARS, true),
-    v.status === undefined || v.status === null || v.status === "" ? "missing status" : null,
-    oneOf(v.status, "status", FINDING_STATUSES),
-    oneOf(v.severity, "severity", SEVERITIES, true),
+    str(v.fingerprint, "fingerprint", MAX_ID_CHARS, REQUIRED),
+    str(v.machineId, "machineId", MAX_ID_CHARS, REQUIRED),
+    oneOf(v.status, "status", FINDING_STATUSES, REQUIRED_NON_EMPTY),
+    oneOf(v.severity, "severity", SEVERITIES, REQUIRED),
     str(v.category, "category", MAX_SHORT_CHARS),
     str(v.component, "component", MAX_SHORT_CHARS),
-    str(v.linkedAction, "linkedAction", MAX_SHORT_CHARS, false, true),
+    str(v.linkedAction, "linkedAction", MAX_SHORT_CHARS, NULLABLE),
     num(v.count, "count"),
     num(v.recurrenceCount, "recurrenceCount"),
     iso(v.firstSeen, "firstSeen", now),
-    iso(v.lastSeen, "lastSeen", now, false, true),
+    iso(v.lastSeen, "lastSeen", now, { noFuture: true }),
     str(v.sample, "sample", MAX_SAMPLE_CHARS),
     sourcesCheck(v.sources),
-    detail(v.detail),
+    str(v.detail, "detail", MAX_DETAIL_CHARS),
   ]);
 }
 
@@ -302,7 +308,6 @@ export function mergeHealBuckets(target: HealBuckets, data: unknown, now: number
   };
 }
 
-
 export type IngestResult =
   | { status: 400; json: { error: string } }
   | {
@@ -311,7 +316,6 @@ export type IngestResult =
       heals: HealReport[];
       findings: Finding[];
     };
-
 
 /**
  * Validate the heal/finding part of a POST /api/ingest body. Invalid records
@@ -374,12 +378,8 @@ export function machineErrorPicture(
     else p.info++;
   }
   for (const h of heals) {
-    if (!FIX_OUTCOMES.includes(h.outcome)) {
-      pic(h.machineId);
-      continue;
-    }
-    const p = pic(h.machineId);
-    if (!p.lastFix || (h.ts ?? "") > (p.lastFix.ts ?? "")) p.lastFix = h;
+    const p = pic(h.machineId); // machines with only failed heals are listed too
+    if (FIX_OUTCOMES.includes(h.outcome) && (!p.lastFix || (h.ts ?? "") > (p.lastFix.ts ?? ""))) p.lastFix = h;
   }
   const weight = (p: MachineErrorPicture) => [p.critical, p.error, p.warning, p.info];
   return Array.from(pics.values()).sort((a, b) => {
