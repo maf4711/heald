@@ -141,9 +141,7 @@ public actor HealReportOutbox {
     /// rejected with 4xx while an empty push succeeded). Returns the number of reports skipped.
     @discardableResult
     public func skip(limit: Int = maxBatch) -> Int {
-        var cursor = loadCursor()
-        if cursor > fileSize() { cursor = 0 }
-        let batch = readBatch(since: cursor, limit: min(limit, Self.maxBatch))
+        let (cursor, batch) = pendingBatch(limit: limit)
         guard batch.nextOffset > cursor else { return 0 }
         saveCursor(batch.nextOffset)
         corruptCount += batch.corrupt
@@ -162,9 +160,7 @@ public actor HealReportOutbox {
         limit: Int = maxBatch,
         send: @escaping @Sendable ([HealReport]) async throws -> Bool
     ) async -> Int {
-        var cursor = loadCursor()
-        if cursor > fileSize() { cursor = 0 } // file replaced or truncated externally
-        let batch = readBatch(since: cursor, limit: min(limit, Self.maxBatch))
+        let batch = pendingBatch(limit: limit).batch
         let rotatedBefore = rotatedBytes
         let reports = batch.reports
         let result = await AutohealAdvisor.withDeadline(sendTimeout) {
@@ -175,6 +171,13 @@ public actor HealReportOutbox {
         saveCursor(batch.nextOffset > shift ? batch.nextOffset - shift : 0)
         corruptCount += batch.corrupt
         return reports.count
+    }
+
+    /// The committed cursor and the next ≤ min(limit, 100) reports after it.
+    private func pendingBatch(limit: Int) -> (cursor: UInt64, batch: Batch) {
+        var cursor = loadCursor()
+        if cursor > fileSize() { cursor = 0 } // file replaced or truncated externally
+        return (cursor, readBatch(since: cursor, limit: min(limit, Self.maxBatch)))
     }
 
     // MARK: files
