@@ -46,11 +46,13 @@ struct AutohealAdvisorTests {
     // MARK: gate (criterion 1)
 
     // (a)
+    // (a) amended by review: firewall_on is veto-proof (see AdvisorPolicyTests), so the
+    // honoured-skip case uses a non-security action.
     @Test func gateHonoursSkipForTriggeredAction() {
-        let out = AutohealAdvisor.gate(ruleAction: .firewallOn, verdict: verdict(.firewallOn, .skip))
+        let out = AutohealAdvisor.gate(ruleAction: .diskCleanup, verdict: verdict(.diskCleanup, .skip))
         #expect(out.recommendation == .skip)
         #expect(out.source == .appleFM)
-        #expect(out.action == .firewallOn)
+        #expect(out.action == .diskCleanup)
     }
 
     @Test func gateHonoursDeferAndProceedForTriggeredAction() {
@@ -183,8 +185,8 @@ struct AutohealAdvisorTests {
     }
 
     @Test func consultAppliesParseAndGate() async {
-        let skip = await AutohealAdvisor.consult(ruleAction: .firewallOn, timeout: .seconds(5), available: true) {
-            #"{"action":"firewall_on","recommendation":"skip","confidence":0.7,"rationale":"user disabled on purpose"}"#
+        let skip = await AutohealAdvisor.consult(ruleAction: .diskCleanup, timeout: .seconds(5), available: true) {
+            #"{"action":"disk_cleanup","recommendation":"skip","confidence":0.7,"rationale":"plenty of purgeable space"}"#
         }
         #expect(skip.recommendation == .skip)
         #expect(skip.source == .appleFM)

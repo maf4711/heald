@@ -42,4 +42,20 @@ struct AdvisorPolicyTests {
         let out = AutohealAdvisor.gate(ruleAction: .ramPurge, verdict: fm(.ramPurge, .proceed, confidence: 0.1))
         #expect(out.recommendation == .proceed)
     }
+
+    // MARK: fix 2 — security actions are veto-proof
+
+    @Test func vetoProofActionsAreFirewallAndFileVault() {
+        #expect(AutohealAdvisor.vetoProofActions == [.firewallOn, .filevaultWarn])
+    }
+
+    @Test(arguments: [HealAction.firewallOn, .filevaultWarn])
+    func securityActionsIgnoreConfidentVeto(_ action: HealAction) {
+        for rec in [AdvisorRecommendation.skip, .defer] {
+            let out = AutohealAdvisor.gate(ruleAction: action, verdict: fm(action, rec, confidence: 1))
+            #expect(out.recommendation == .proceed)
+            #expect(out.source == .rules)
+            #expect(out.action == action)
+        }
+    }
 }

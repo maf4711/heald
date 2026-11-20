@@ -84,6 +84,8 @@ public enum AutohealAdvisor: Sendable {
     public static let defaultTimeout: Duration = .seconds(5)
     /// A defer/skip below this confidence is ignored (rules decide).
     public static let minVetoConfidence = 0.6
+    /// Security controls: the advisor is consulted and logged but can never downgrade them.
+    public static let vetoProofActions: Set<HealAction> = [.firewallOn, .filevaultWarn]
 
     /// Combine the rule decision with the advisor verdict.
     public static func gate(ruleAction: HealAction, verdict: AdvisorVerdict) -> AdvisorVerdict {
@@ -93,6 +95,13 @@ public enum AutohealAdvisor: Sendable {
                 rationale: "advisor named \(verdict.action.rawValue), ignored",
                 latencyMs: verdict.latencyMs
             )
+        }
+        if verdict.recommendation != .proceed, vetoProofActions.contains(ruleAction) {
+            return .rulesFallback(
+                ruleAction,
+                rationale: "veto-proof action, advisor \(verdict.recommendation.rawValue) ignored: \(verdict.rationale)",
+                latencyMs: verdict.latencyMs
+            ).truncated()
         }
         if verdict.recommendation != .proceed, verdict.confidence < minVetoConfidence {
             return .rulesFallback(
