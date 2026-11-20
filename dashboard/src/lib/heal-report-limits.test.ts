@@ -6,6 +6,7 @@ import {
   validateFinding,
   applyFindings,
   ingestBody,
+  publicFinding,
   MAX_BATCH,
   MAX_FINDINGS_TOTAL,
   type HealReport,
@@ -174,4 +175,12 @@ test("F2 applyFindings caps the whole bucket at MAX_FINDINGS_TOTAL (newest lastS
   assert.equal(out.length, 20000);
   assert.equal(out.some((f) => f.machineId === "node-0"), false, "oldest machine evicted");
   assert.equal(out[0].machineId, "node-40");
+});
+
+test("N1 publicFinding omits sample (kept in storage)", () => {
+  const stored = finding({ sample: "/Users/~/secret.txt crashed" }) as unknown as Finding;
+  const pub = publicFinding(stored);
+  assert.equal("sample" in pub, false);
+  assert.equal(pub.fingerprint, stored.fingerprint);
+  assert.equal(stored.sample, "/Users/~/secret.txt crashed");
 });

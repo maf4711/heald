@@ -389,3 +389,9 @@ export function machineErrorPicture(
     return a.machineId.localeCompare(b.machineId);
   });
 }
+
+/** Finding as served by the public GET /api/findings: `sample` stays server-side. */
+export function publicFinding(f: Finding): Omit<Finding, "sample"> {
+  const { sample: _sample, ...rest } = f;
+  return rest;
+}
