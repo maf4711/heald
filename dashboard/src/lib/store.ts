@@ -11,6 +11,7 @@ import { applyFindings, applyHeals, type Finding, type HealReport } from "./heal
 import {
   applySnapshot,
   createState,
+  mergeAndWrite,
   pushEvent,
   snapshotFromState,
   type ActivityEntry,
@@ -62,37 +63,50 @@ function writeTmpCache(snap: StoreSnapshot) {
   }
 }
 
+/** Remote snapshot + ETag; null when the blob does not exist. Throws on read errors. */
+async function readBlobRemote(token: string): Promise<{ snapshot: StoreSnapshot; etag: string } | null> {
+  const { get } = await import("@vercel/blob");
+  const result = await get(BLOB_PATHNAME, { access: "private", token, useCache: false });
+  if (!result) return null; // not found
+  if (result.statusCode !== 200 || !result.stream) throw new Error("blob read failed");
+  const text = await new Response(result.stream).text();
+  return { snapshot: (text ? JSON.parse(text) : {}) as StoreSnapshot, etag: result.blob.etag };
+}
+
 async function readBlobCache(): Promise<StoreSnapshot | null> {
   const token = process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) return null;
   try {
-    const { get } = await import("@vercel/blob");
-    const result = await get(BLOB_PATHNAME, {
-      access: "private",
-      token,
-      useCache: false,
-    });
-    if (!result || result.statusCode !== 200 || !result.stream) return null;
-    const text = await new Response(result.stream).text();
-    if (!text) return null;
-    return JSON.parse(text) as StoreSnapshot;
+    return (await readBlobRemote(token))?.snapshot ?? null;
   } catch {
     return null;
   }
 }
 
-async function writeBlobCache(snap: StoreSnapshot) {
+/**
+ * Read-merge-write: merge whatever another instance persisted since our
+ * hydrate, then write with ifMatch so a concurrent write is never clobbered
+ * (retried up to 3x on BlobPreconditionFailedError).
+ */
+async function writeBlobCache(s: StoreState) {
   const token = process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) return;
   try {
-    const { put } = await import("@vercel/blob");
-    // Private store (heald-fleet) + overwrite same pathname
-    await put(BLOB_PATHNAME, JSON.stringify(snap), {
-      access: "private",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      token,
-      contentType: "application/json",
+    const { put, BlobPreconditionFailedError } = await import("@vercel/blob");
+    await mergeAndWrite(s, {
+      read: () => readBlobRemote(token),
+      write: async (snap, etag) => {
+        // Private store (heald-fleet) + overwrite same pathname
+        await put(BLOB_PATHNAME, JSON.stringify(snap), {
+          access: "private",
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          token,
+          contentType: "application/json",
+          ...(etag ? { ifMatch: etag } : {}),
+        });
+      },
+      isConflict: (err) => err instanceof BlobPreconditionFailedError,
     });
   } catch {
     /* optional durability path */
@@ -127,10 +141,9 @@ async function persist(force = false) {
     return;
   }
   s.lastPersistMs = now;
-  const snap = snapshotFromState(s);
-  writeTmpCache(snap);
-  // Await blob so serverless does not freeze mid-write
-  await writeBlobCache(snap);
+  // Await blob so serverless does not freeze mid-write (merges remote state into s)
+  await writeBlobCache(s);
+  writeTmpCache(snapshotFromState(s));
 }
 
 export async function upsertMachine(data: MachineMetrics) {

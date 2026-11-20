@@ -191,3 +191,32 @@ export function applySnapshot(s: StoreState, data: Partial<StoreSnapshot>) {
     }
   }
 }
+
+export const MAX_PERSIST_ATTEMPTS = 3;
+
+export interface SnapshotIO {
+  /** Current remote snapshot + its ETag, or null when none exists yet. */
+  read(): Promise<{ snapshot: Partial<StoreSnapshot>; etag?: string } | null>;
+  /** Write; must throw when `etag` no longer matches (optimistic concurrency). */
+  write(snapshot: StoreSnapshot, etag: string | undefined): Promise<void>;
+  isConflict(err: unknown): boolean;
+}
+
+/**
+ * Read-merge-write with ETag precondition: merges a concurrent writer's
+ * snapshot into `s` (applySnapshot is idempotent), writes with `ifMatch`,
+ * and retries up to MAX_PERSIST_ATTEMPTS on conflict. Returns true on success.
+ */
+export async function mergeAndWrite(s: StoreState, io: SnapshotIO): Promise<boolean> {
+  for (let attempt = 0; attempt < MAX_PERSIST_ATTEMPTS; attempt++) {
+    const remote = await io.read();
+    if (remote) applySnapshot(s, remote.snapshot);
+    try {
+      await io.write(snapshotFromState(s), remote?.etag);
+      return true;
+    } catch (err) {
+      if (!io.isConflict(err)) return false;
+    }
+  }
+  return false;
+}
