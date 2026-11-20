@@ -3,7 +3,9 @@ import OSLog
 
 /// Free RAM — adapted from meisterSiri `free` (user-safe; purge needs sudo ticket).
 struct RAMPurge: Sendable {
-    func purge(activityLog: ActivityLog) async {
+    /// True when `purge` ran; false when it was unavailable (no sudo ticket) or failed.
+    @discardableResult
+    func purge(activityLog: ActivityLog) async -> Bool {
         // Always drop purgeable memory hints via memory pressure simulation is invasive.
         // Prefer `purge` when passwordless sudo works; else notify only.
         let before = freeMB()
@@ -20,7 +22,7 @@ struct RAMPurge: Sendable {
                 summary: summary
             ))
             Logger.healer.info("\(summary)")
-            return
+            return true
         }
 
         // Soft: restart Dock/Finder is too aggressive for enterprise auto — skip
@@ -30,6 +32,7 @@ struct RAMPurge: Sendable {
             detail: "Run: heald free  (or configure passwordless purge)"
         ))
         Logger.healer.info("purge unavailable without sudo -n")
+        return false
     }
 
     private func freeMB() -> Int {

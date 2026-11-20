@@ -116,6 +116,7 @@ struct SelfHealOrchestrator: Service {
             selfHealEnabled: policy.selfHealEnabled
         ) {
             await fire(state: state, key: "perf_autoheal", reason: degraded ? "cpu/load degraded" : "boot settle", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
+                // A perf pass has no failure mode: it either fixed something or found nothing left.
                 _ = await self.perf.run(
                     activityLog: self.activityLog,
                     cpuOverall: cpu.overall,
@@ -130,12 +131,10 @@ struct SelfHealOrchestrator: Service {
            ram.pressureLevel >= policy.ramPressureMin {
             await fire(state: state, key: "ram_purge", reason: "RAM pressure=\(ram.pressureLevel)", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
                 await self.ramPurge.purge(activityLog: self.activityLog)
-                return true
             }
         } else if policy.ramPurgeEnabled, ram.timestamp != .distantPast, ram.swapUsed > 1_073_741_824 {
             await fire(state: state, key: "ram_purge", reason: "swap>\(Int(ram.swapUsed / 1_048_576))MB", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
                 await self.ramPurge.purge(activityLog: self.activityLog)
-                return true
             }
         }
 
@@ -156,9 +155,8 @@ struct SelfHealOrchestrator: Service {
             }
             if freePct < policy.diskFreePctCritical {
                 await fire(state: state, key: "deep_trim", reason: String(format: "disk critical %.0f%%", freePct), policy: policy, memoryCritical: memoryCritical, budget: &budget) {
-                    await self.deepClean.run(activityLog: self.activityLog)
-                    await self.autofix.brewCleanupLight(activityLog: self.activityLog)
-                    return true
+                    await self.deepClean.run(activityLog: self.activityLog) // best-effort, no failure signal
+                    return await self.autofix.brewCleanupLight(activityLog: self.activityLog)
                 }
             }
         }
@@ -172,10 +170,9 @@ struct SelfHealOrchestrator: Service {
                         title: "heald",
                         message: "Mac thermal \(thermal.thermalState.rawValue) — self-heal free RAM"
                     )
-                    if policy.ramPurgeEnabled {
-                        await self.ramPurge.purge(activityLog: self.activityLog)
-                    }
-                    return true
+                    // Notification always goes out; success = the RAM purge when enabled.
+                    guard policy.ramPurgeEnabled else { return true }
+                    return await self.ramPurge.purge(activityLog: self.activityLog)
                 }
             case .nominal, .fair:
                 break
@@ -185,9 +182,9 @@ struct SelfHealOrchestrator: Service {
         // 4) Firewall
         if policy.firewallEnforce, security.timestamp != .distantPast, !security.firewallEnabled {
             await fire(state: state, key: "firewall_on", reason: "firewall disabled", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
-                await self.autofix.enableFirewall(activityLog: self.activityLog)
-                await WebhookNotifier.shared.emit(title: "Firewall", text: "Enforced enable", severity: "warning")
-                return true
+                let ok = await self.autofix.enableFirewall(activityLog: self.activityLog)
+                await WebhookNotifier.shared.emit(title: "Firewall", text: ok ? "Enforced enable" : "Enable failed", severity: "warning")
+                return ok
             }
         }
 
@@ -209,7 +206,7 @@ struct SelfHealOrchestrator: Service {
 
         // 6) Proactive
         await fire(state: state, key: "proactive_heal", reason: "scheduled proactive", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
-            await self.proactive.run(activityLog: self.activityLog)
+            await self.proactive.run(activityLog: self.activityLog) // best-effort hygiene, no failure signal
             return true
         }
 

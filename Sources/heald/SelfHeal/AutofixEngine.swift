@@ -4,11 +4,12 @@ import OSLog
 /// Deterministic fixes adapted from meisterSiri autofix — **native**, no external CLI.
 struct AutofixEngine: Sendable {
     /// Try to enable Application Firewall (may require existing privileges).
-    func enableFirewall(activityLog: ActivityLog) async {
+    @discardableResult
+    func enableFirewall(activityLog: ActivityLog) async -> Bool {
         let fw = "/usr/libexec/ApplicationFirewall/socketfilterfw"
         guard FileManager.default.isExecutableFile(atPath: fw) else {
             Logger.healer.info("Firewall tool missing")
-            return
+            return false
         }
         // Non-interactive; succeeds if already authorized or SIP policy allows
         let r = ShellRunner.run(fw, arguments: ["--setglobalstate", "on"])
@@ -20,17 +21,21 @@ struct AutofixEngine: Sendable {
             summary: summary
         ))
         Logger.healer.info("\(summary)")
+        return r.succeeded
     }
 
     /// Light brew hygiene: cleanup old downloads (no full upgrade — too heavy for hot path).
-    func brewCleanupLight(activityLog: ActivityLog) async {
-        guard let brew = ShellRunner.findExecutable("brew") else { return }
+    /// True when cleanup ran OK or there is no Homebrew (nothing to do).
+    @discardableResult
+    func brewCleanupLight(activityLog: ActivityLog) async -> Bool {
+        guard let brew = ShellRunner.findExecutable("brew") else { return true }
         let r = ShellRunner.run(brew, arguments: ["cleanup", "-s", "--prune=all"])
         try? await activityLog.log(event: ActivityEvent(
             type: .brewUpgrade,
             summary: r.succeeded ? "brew cleanup light OK" : "brew cleanup failed",
             detail: String((r.output + r.errorOutput).prefix(500))
         ))
+        return r.succeeded
     }
 
     /// Quarantine orphan user LaunchAgents whose Program is missing.
