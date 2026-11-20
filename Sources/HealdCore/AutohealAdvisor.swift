@@ -67,6 +67,14 @@ public struct AdvisorVerdict: Codable, Sendable, Equatable {
     }
 }
 
+extension AdvisorVerdict {
+    func truncated() -> AdvisorVerdict {
+        var v = self
+        v.rationale = String(v.rationale.prefix(AutohealAdvisor.maxRationaleChars))
+        return v
+    }
+}
+
 /// Apple FM as autoheal **advisor**, never executor. Pure policy — no model, no shell.
 /// The advisor may only downgrade a rule-triggered action (proceed → defer/skip);
 /// it can never start an action or bypass consent.
@@ -74,6 +82,8 @@ public enum AutohealAdvisor: Sendable {
     public static let maxInputChars = 2000
     public static let maxRationaleChars = 280
     public static let defaultTimeout: Duration = .seconds(5)
+    /// A defer/skip below this confidence is ignored (rules decide).
+    public static let minVetoConfidence = 0.6
 
     /// Combine the rule decision with the advisor verdict.
     public static func gate(ruleAction: HealAction, verdict: AdvisorVerdict) -> AdvisorVerdict {
@@ -83,6 +93,13 @@ public enum AutohealAdvisor: Sendable {
                 rationale: "advisor named \(verdict.action.rawValue), ignored",
                 latencyMs: verdict.latencyMs
             )
+        }
+        if verdict.recommendation != .proceed, verdict.confidence < minVetoConfidence {
+            return .rulesFallback(
+                ruleAction,
+                rationale: "low-confidence \(verdict.recommendation.rawValue) ignored: \(verdict.rationale)",
+                latencyMs: verdict.latencyMs
+            ).truncated()
         }
         return verdict
     }
