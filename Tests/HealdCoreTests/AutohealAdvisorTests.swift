@@ -32,6 +32,7 @@ struct AutohealAdvisorTests {
         #expect(keys == [
             "ram_purge", "disk_cleanup", "deep_trim", "firewall_on", "filevault_warn",
             "proactive_heal", "notify_thermal", "brew_light", "perf_autoheal",
+            "app_restart", "dns_flush",
         ])
     }
 

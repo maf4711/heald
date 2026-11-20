@@ -1,4 +1,5 @@
 import Foundation
+import HealdCore
 
 /// Utility for running shell commands from maintenance modules.
 enum ShellRunner {
@@ -9,56 +10,18 @@ enum ShellRunner {
         var succeeded: Bool { exitCode == 0 }
     }
 
+    /// Delegates to `HealdCore.ProcessRunner`, which drains stdout/stderr while the child runs
+    /// (outputs > 64 KB such as `launchctl print` used to deadlock until the timeout).
     static func run(
         _ executable: String,
         arguments: [String] = [],
         environment: [String: String]? = nil,
         timeoutSeconds: TimeInterval? = nil
     ) -> Result {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: executable)
-        task.arguments = arguments
-        if let env = environment { task.environment = env }
-
-        let outPipe = Pipe()
-        let errPipe = Pipe()
-        task.standardOutput = outPipe
-        task.standardError = errPipe
-
-        do {
-            try task.run()
-        } catch {
-            return Result(output: "", errorOutput: error.localizedDescription, exitCode: -1)
-        }
-
-        if let timeout = timeoutSeconds, timeout > 0 {
-            let deadline = Date().addingTimeInterval(timeout)
-            while task.isRunning && Date() < deadline {
-                Thread.sleep(forTimeInterval: 0.05)
-            }
-            if task.isRunning {
-                task.terminate()
-                // brief wait then force-kill if needed
-                Thread.sleep(forTimeInterval: 0.2)
-                if task.isRunning { task.interrupt() }
-                return Result(
-                    output: String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "",
-                    errorOutput: "timeout after \(Int(timeout))s",
-                    exitCode: 124
-                )
-            }
-        } else {
-            task.waitUntilExit()
-        }
-
-        let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
-
-        return Result(
-            output: String(data: outData, encoding: .utf8) ?? "",
-            errorOutput: String(data: errData, encoding: .utf8) ?? "",
-            exitCode: task.terminationStatus
+        let r = ProcessRunner.run(
+            executable, arguments: arguments, environment: environment, timeoutSeconds: timeoutSeconds
         )
+        return Result(output: r.output, errorOutput: r.errorOutput, exitCode: r.exitCode)
     }
 
     /// Find executable in common paths.

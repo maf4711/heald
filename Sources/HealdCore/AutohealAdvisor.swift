@@ -12,6 +12,8 @@ public enum HealAction: String, Codable, Sendable, CaseIterable {
     case notifyThermal = "notify_thermal"
     case brewLight = "brew_light"
     case perfAutoheal = "perf_autoheal"
+    case appRestart = "app_restart"
+    case dnsFlush = "dns_flush"
 }
 
 public enum AdvisorRecommendation: String, Codable, Sendable, CaseIterable {

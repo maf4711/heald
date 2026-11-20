@@ -46,6 +46,7 @@ struct HealdApp: AsyncParsableCommand {
             FreeCommand.self,
             PolicyCommand.self,
             ComplianceCommand.self,
+            FindingsCommand.self,
             EnrollCommand.self,
             ApproveCommand.self,
             SudoSetupCommand.self,

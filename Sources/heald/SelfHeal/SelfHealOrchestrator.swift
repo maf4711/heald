@@ -17,6 +17,7 @@ struct SelfHealOrchestrator: Service {
     private let cleaner = SystemCleaner()
     private let deepClean = DeepClean()
     private let perf = PerformanceHealer()
+    let scannerRemediation = ScannerRemediation()
 
     private let cooldowns: [String: TimeInterval] = [
         "ram_purge": 600,
@@ -28,7 +29,11 @@ struct SelfHealOrchestrator: Service {
         "notify_thermal": 1800,
         "brew_light": 7200,
         "perf_autoheal": 300,
+        "app_restart": 60,
+        "dns_flush": 600,
     ]
+
+    func cooldown(for key: String) -> TimeInterval { cooldowns[key] ?? 900 }
 
     private let batteryGuardian = BatteryGuardian()
     private let networkHeal = NetworkSelfHeal()
@@ -196,10 +201,15 @@ struct SelfHealOrchestrator: Service {
             await self.proactive.run(activityLog: self.activityLog)
         }
 
+        // 7) Device findings (SystemErrorScanner) — fixes run only through the consent gate in fire
+        await healScannerFindings(state: state, policy: policy, memoryCritical: memoryCritical, budget: &budget)
+
         await writeStatus(state: state, ram: ram, disk: disk, policy: policy)
     }
 
-    private func fire(
+    /// Gate shared by every action: cooldown → advisor → consent → run.
+    @discardableResult
+    func fire(
         state: HealCooldownState,
         key: String,
         reason: String,
@@ -207,9 +217,9 @@ struct SelfHealOrchestrator: Service {
         memoryCritical: Bool = false,
         budget: inout AdvisorBudget,
         action: @escaping () async -> Void
-    ) async {
-        let cd = cooldowns[key] ?? 900
-        guard await state.canFire(key: key, cooldown: cd) else { return }
+    ) async -> GateOutcome {
+        let cd = cooldown(for: key)
+        guard await state.canFire(key: key, cooldown: cd) else { return .cooldown }
 
         // Advisor (Apple FM, on-device): may only downgrade proceed → defer/skip. Never executes.
         if let healAction = HealdCore.HealAction(rawValue: key) {
@@ -230,7 +240,7 @@ struct SelfHealOrchestrator: Service {
                     key: key,
                     at: AutohealAdvisor.cooldownMark(now: Date(), cooldown: cd, retryAfter: retryAfter)
                 )
-                return
+                return .advisorDeferred
             case .skip:
                 await state.markFired(key: key)
                 try? await activityLog.log(event: ActivityEvent(
@@ -239,7 +249,7 @@ struct SelfHealOrchestrator: Service {
                     detail: verdict.rationale,
                     aiGenerated: verdict.source == .appleFM
                 ))
-                return
+                return .advisorSkipped
             }
         }
 
@@ -261,7 +271,7 @@ struct SelfHealOrchestrator: Service {
                     )
                 }
                 await state.markFired(key: key) // avoid spam
-                return
+                return policy.consent == .ask ? .blockedAsk : .blockedLog
             }
         }
 
@@ -287,6 +297,7 @@ struct SelfHealOrchestrator: Service {
             )
             await WebhookNotifier.shared.emit(title: key, text: reason, severity: "info")
         }
+        return .ran
     }
 
     /// Consult Apple FM within this tick's budget; rules fallback once the budget/breaker is spent.
@@ -354,27 +365,5 @@ struct SelfHealOrchestrator: Service {
         if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: dir.appendingPathComponent("self_heal.json"), options: .atomic)
         }
-    }
-}
-
-actor HealCooldownState {
-    private var last: [String: Date] = [:]
-
-    func canFire(key: String, cooldown: TimeInterval) -> Bool {
-        guard let t = last[key] else { return true }
-        return Date().timeIntervalSince(t) >= cooldown
-    }
-
-    func markFired(key: String, at date: Date = Date()) {
-        last[key] = date
-    }
-
-    func snapshot() -> [String: String] {
-        let f = ISO8601DateFormatter()
-        var out: [String: String] = [:]
-        for (k, v) in last {
-            out[k] = f.string(from: v)
-        }
-        return out
     }
 }

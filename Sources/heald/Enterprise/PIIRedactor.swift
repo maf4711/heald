@@ -1,4 +1,5 @@
 import Foundation
+import HealdCore
 
 /// Redact likely PII before leaving the device (cloud / SIEM).
 enum PIIRedactor {
@@ -34,7 +35,8 @@ enum PIIRedactor {
             let range = NSRange(s.startIndex..<s.endIndex, in: s)
             s = regex.stringByReplacingMatches(in: s, options: [], range: range, withTemplate: "<ip>")
         }
-        return s
+        // Tokens / secrets: Bearer, long hex, base64-ish, DSID-like digit runs
+        return SecretRedactor.redact(s)
     }
 
     static func redactEventDict(_ dict: [String: Any]) -> [String: Any] {
