@@ -221,9 +221,9 @@ struct SelfHealOrchestrator: Service {
                 await ai.adviseHeal(action: key, reason: reason, context: context)
             }
             await logAdvice(verdict)
-            switch verdict.recommendation {
-            case .proceed:
-                break
+            switch AutohealAdvisor.disposition(verdict, cooldown: cd) {
+            case .run:
+                break // continue to the consent gate below
             case .defer:
                 await state.markFired(key: key)
                 return

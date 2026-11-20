@@ -78,4 +78,31 @@ struct AdvisorPolicyTests {
             #expect(AutohealAdvisor.isEligible(action: action, memoryCritical: true) == true)
         }
     }
+
+    // MARK: fix 5 — verdict → disposition is pure
+
+    @Test func proceedMapsToRun() {
+        #expect(AutohealAdvisor.disposition(fm(.diskCleanup, .proceed), cooldown: 1800) == .run)
+        #expect(AutohealAdvisor.disposition(.rulesFallback(.diskCleanup), cooldown: 1800) == .run)
+    }
+
+    @Test func skipMapsToSkip() {
+        #expect(AutohealAdvisor.disposition(fm(.diskCleanup, .skip), cooldown: 1800) == .skip)
+    }
+
+    @Test func deferMapsToDeferWithRetry() {
+        if case .defer = AutohealAdvisor.disposition(fm(.diskCleanup, .defer), cooldown: 1800) {} else {
+            Issue.record("defer verdict must map to .defer")
+        }
+    }
+
+    /// `.run` only means "the advisor does not object"; it carries no consent decision.
+    /// fire() evaluates consent after it (consent=log stays blocked there).
+    @Test func runIsNotAConsentBypass() {
+        let d = AutohealAdvisor.disposition(fm(.ramPurge, .proceed, confidence: 1), cooldown: 600)
+        #expect(d == .run)
+        #expect(d.consultsConsent == true)
+        #expect(AdvisorDisposition.skip.consultsConsent == false)
+        #expect(AdvisorDisposition.defer(retryAfter: 1).consultsConsent == false)
+    }
 }

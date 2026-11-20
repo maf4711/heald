@@ -75,6 +75,16 @@ extension AdvisorVerdict {
     }
 }
 
+/// What fire() does with a gated verdict. Consent is evaluated only for `.run`, after this.
+public enum AdvisorDisposition: Sendable, Equatable {
+    case run
+    case `defer`(retryAfter: TimeInterval)
+    case skip
+
+    /// Only `.run` continues to the consent gate; the advisor can never pass it.
+    public var consultsConsent: Bool { self == .run }
+}
+
 /// Apple FM as autoheal **advisor**, never executor. Pure policy — no model, no shell.
 /// The advisor may only downgrade a rule-triggered action (proceed → defer/skip);
 /// it can never start an action or bypass consent.
@@ -124,6 +134,15 @@ public enum AutohealAdvisor: Sendable {
             ).truncated()
         }
         return verdict
+    }
+
+    /// Map a gated verdict to the orchestrator's next step for an action with `cooldown`.
+    public static func disposition(_ verdict: AdvisorVerdict, cooldown: TimeInterval) -> AdvisorDisposition {
+        switch verdict.recommendation {
+        case .proceed: return .run
+        case .defer: return .defer(retryAfter: cooldown)
+        case .skip: return .skip
+        }
     }
 
     private struct Wire: Decodable {
