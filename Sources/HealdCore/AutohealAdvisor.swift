@@ -92,6 +92,8 @@ public enum AutohealAdvisor: Sendable {
     public static let maxInputChars = 2000
     public static let maxRationaleChars = 280
     public static let defaultTimeout: Duration = .seconds(5)
+    /// Rationale of the rules fallback produced by a consult timeout (trips `AdvisorBudget`).
+    public static let timeoutRationale = "advisor timeout"
     /// A defer/skip below this confidence is ignored (rules decide).
     public static let minVetoConfidence = 0.6
     /// Security controls: the advisor is consulted and logged but can never downgrade them.
@@ -200,7 +202,7 @@ public enum AutohealAdvisor: Sendable {
 
         switch answer {
         case .timedOut:
-            return .rulesFallback(ruleAction, rationale: "advisor timeout", latencyMs: ms)
+            return .rulesFallback(ruleAction, rationale: timeoutRationale, latencyMs: ms)
         case .value(nil):
             return .rulesFallback(ruleAction, rationale: "advisor gave no answer", latencyMs: ms)
         case .value(let text?):
