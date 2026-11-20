@@ -23,6 +23,12 @@ public enum PerformanceAutoheal: Sendable {
         return false
     }
 
+    /// Whether the `perf_autoheal` stampede heal should fire this tick.
+    /// `enabled` is the policy key `performanceAutohealEnabled` (callers pass `?? true`).
+    public static func shouldFire(degraded: Bool, enabled: Bool, selfHealEnabled: Bool) -> Bool {
+        degraded && enabled && selfHealEnabled
+    }
+
     /// Interval jobs (StartInterval) must not also RunAtLoad — that is the
     /// login pile-up (Mail auto, repo-sync). KeepAlive daemons stay.
     public static func shouldStripRunAtLoad(
