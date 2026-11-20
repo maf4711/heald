@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { validateApiKey } from "@/lib/auth";
-import { upsertMachine, addEvent, addHeals, addFindings } from "@/lib/store";
+import { upsertMachine, addEvent, addHeals, addFindings, flush } from "@/lib/store";
 import { ingestBody } from "@/lib/heal-report";
 
 // POST /api/ingest — receives metric push from daemon (CLOUD-02)
@@ -19,18 +19,21 @@ export async function POST(request: Request) {
       return NextResponse.json(result.json, { status: 400 });
     }
 
+    // Buffer every write, then persist once (one blob read-merge-write per request)
+    const deferred = { persist: false };
     if (body.metrics) {
-      await upsertMachine(body.metrics);
+      await upsertMachine(body.metrics, deferred);
     }
 
     if (body.events && Array.isArray(body.events)) {
       for (const event of body.events) {
-        await addEvent(event);
+        await addEvent(event, deferred);
       }
     }
 
-    if (result.heals.length) await addHeals(result.heals);
-    if (result.findings.length) await addFindings(result.findings);
+    if (result.heals.length) await addHeals(result.heals, deferred);
+    if (result.findings.length) await addFindings(result.findings, deferred);
+    await flush();
 
     return NextResponse.json(result.json);
   } catch {

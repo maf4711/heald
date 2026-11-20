@@ -146,7 +146,15 @@ async function persist(force = false) {
   writeTmpCache(snapshotFromState(s));
 }
 
-export async function upsertMachine(data: MachineMetrics) {
+/** Write options: `persist: false` defers the write to a later flush(). */
+export type WriteOptions = { persist?: boolean };
+
+/** Persist once after a batch of `{ persist: false }` writes (one blob write per ingest). */
+export async function flush() {
+  await persist(true);
+}
+
+export async function upsertMachine(data: MachineMetrics, opts: WriteOptions = {}) {
   await hydrate();
   const s = state();
   const machineId = data.machineId || data.hostname || "unknown";
@@ -180,30 +188,30 @@ export async function upsertMachine(data: MachineMetrics) {
     }
   }
 
-  await persist(true);
+  if (opts.persist !== false) await persist(true);
 }
 
-export async function addEvent(entry: ActivityEntry) {
+export async function addEvent(entry: ActivityEntry, opts: WriteOptions = {}) {
   await hydrate();
   const s = state();
   pushEvent(s, entry);
-  await persist(true);
+  if (opts.persist !== false) await persist(true);
 }
 
 /** Store validated heal reports (caller validates); dedupe by id, cap 5000. */
-export async function addHeals(heals: HealReport[]) {
+export async function addHeals(heals: HealReport[], opts: WriteOptions = {}) {
   await hydrate();
   const s = state();
   s.heals = applyHeals(s.heals, heals);
-  await persist(true);
+  if (opts.persist !== false) await persist(true);
 }
 
 /** Upsert validated findings by (machineId, fingerprint), cap 500 per machine. */
-export async function addFindings(findings: Finding[]) {
+export async function addFindings(findings: Finding[], opts: WriteOptions = {}) {
   await hydrate();
   const s = state();
   s.findings = applyFindings(s.findings, findings);
-  await persist(true);
+  if (opts.persist !== false) await persist(true);
 }
 
 export async function getHeals(machineId?: string, limit = 50): Promise<HealReport[]> {
