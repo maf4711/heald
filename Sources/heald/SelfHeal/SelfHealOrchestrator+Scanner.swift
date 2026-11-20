@@ -15,10 +15,14 @@ extension SelfHealOrchestrator {
             let targets = await FindingsStore.shared.peek(healAction)
             guard !targets.isEmpty else { continue }
             let reason = "\(key) for \(targets.joined(separator: ", "))"
+            let fingerprint = await FindingsStore.shared.peekFingerprints(healAction).first
             // Drain inside the action: requests survive cooldown, advisor defer and consent=ask.
-            let outcome = await fire(state: state, key: key, reason: reason, policy: policy, memoryCritical: memoryCritical, budget: &budget) {
+            let outcome = await fire(
+                state: state, key: key, reason: reason, policy: policy, memoryCritical: memoryCritical,
+                findingFingerprint: fingerprint, budget: &budget
+            ) {
                 let requests = await FindingsStore.shared.drain(healAction)
-                await self.scannerRemediation.run(healAction, requests, activityLog: self.activityLog)
+                return await self.scannerRemediation.run(healAction, requests, activityLog: self.activityLog)
             }
             switch (ScannerQueue.disposition(after: outcome), outcome) {
             case (.drop, _):

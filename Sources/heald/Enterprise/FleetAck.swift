@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-/// Fleet ACK: write local remediation records + optional POST to heald.sh ingest.
+/// Fleet ACK: local remediation records only (`fleet_ack.ndjson`). Nothing leaves the device here.
 enum FleetAck {
     static func record(
         action: String,
@@ -37,18 +37,6 @@ enum FleetAck {
                 try? line.write(to: file, atomically: true, encoding: .utf8)
             }
         }
-
-        // Optional cloud
-        guard let urlStr = policy.fleetIngestURL, let url = URL(string: urlStr) else { return }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let key = DeviceIdentity.bearerToken(), !key.isEmpty {
-            req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-            req.setValue(key, forHTTPHeaderField: "X-API-Key")
-        }
-        req.httpBody = try? JSONSerialization.data(withJSONObject: event)
-        req.timeoutInterval = 8
-        _ = try? await URLSession.shared.data(for: req)
+        // Cloud delivery moved to heal reports (HealReportOutbox → CloudPusher, gated by allowsCloud()).
     }
 }

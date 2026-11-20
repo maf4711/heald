@@ -62,6 +62,11 @@ actor FindingsStore {
         pending.values.filter { $0.action == action }.map(\.target).sorted()
     }
 
+    /// Fingerprints behind the queued `action` requests (first one links the heal report).
+    func peekFingerprints(_ action: HealdCore.HealAction) -> [String] {
+        pending.values.filter { $0.action == action }.flatMap(\.fingerprints).sorted()
+    }
+
     func drain(_ action: HealdCore.HealAction) -> [RemediationRequest] {
         let out = pending.values.filter { $0.action == action }.sorted { $0.target < $1.target }
         for r in out { pending[RemediationRequest.key(r.action, r.target)] = nil }

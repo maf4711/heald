@@ -64,6 +64,8 @@ struct PolicyPack: Codable, Sendable {
 
     // Integrations
     var slackWebhookURL: String? = nil
+    /// Deprecated: no longer read (FleetAck is local-only; CloudPusher uses HEALD_API_URL).
+    /// Kept so existing policy.json files and the policy key set stay unchanged.
     var fleetIngestURL: String? = "https://heald.sh/api/ingest"
     var maintenanceWindowStartHour: Int = 2   // local hour for safe updates
     var maintenanceWindowEndHour: Int = 5

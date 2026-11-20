@@ -3,9 +3,11 @@ import OSLog
 
 /// Safe softwareupdate: security-labeled patches only, inside maintenance window.
 struct SafeSoftwareUpdate {
-    func maybeRun(activityLog: ActivityLog, policy: PolicyPack) async {
-        guard policy.safeSoftwareUpdate else { return }
-        guard policy.allowsRemediation() else { return }
+    /// Returns (success, summary) when it installed updates, nil when it did nothing.
+    @discardableResult
+    func maybeRun(activityLog: ActivityLog, policy: PolicyPack) async -> (succeeded: Bool, summary: String)? {
+        guard policy.safeSoftwareUpdate else { return nil }
+        guard policy.allowsRemediation() else { return nil }
 
         let hour = Calendar.current.component(.hour, from: Date())
         let start = policy.maintenanceWindowStartHour
@@ -19,12 +21,12 @@ struct SafeSoftwareUpdate {
         }
         guard inWindow else {
             Logger.maintenance.debug("SafeSoftwareUpdate: outside maintenance window")
-            return
+            return nil
         }
 
         guard SudoTicket.hasTicket() else {
             Logger.maintenance.info("SafeSoftwareUpdate: needs sudo ticket")
-            return
+            return nil
         }
 
         // List recommended
@@ -34,7 +36,7 @@ struct SafeSoftwareUpdate {
         let lower = text.lowercased()
         guard lower.contains("security") || lower.contains("recommended") else {
             Logger.maintenance.info("SafeSoftwareUpdate: no security updates listed")
-            return
+            return nil
         }
 
         try? await activityLog.log(event: ActivityEvent(
@@ -64,5 +66,6 @@ struct SafeSoftwareUpdate {
             text: summary,
             severity: r.succeeded ? "info" : "warning"
         )
+        return (r.succeeded, summary)
     }
 }

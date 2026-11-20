@@ -1,8 +1,10 @@
 import Foundation
+import HealdCore
 import ServiceLifecycle
 import OSLog
 
-/// Pushes metrics + activity events to the cloud dashboard API (CLOUD-02, CLOUD-04).
+/// Pushes metrics + activity events to the cloud dashboard API (CLOUD-02, CLOUD-04),
+/// plus heal reports (`HealReportOutbox`, ≤ 100 per push) and the findings snapshot (GOAL 3).
 /// Activity is read from `ActivityLog` via a durable byte-offset cursor (no re-send).
 struct CloudPusher: Service {
     let store: MetricsStore
@@ -28,6 +30,7 @@ struct CloudPusher: Service {
             }
         }
 
+        var findingsGate = FindingsPushGate()
         while true {
             try await Task.sleep(for: Self.pushInterval)
 
@@ -47,21 +50,35 @@ struct CloudPusher: Service {
                 nextCursor: &nextCursor,
                 redact: policy.piiRedaction
             )
+            let findings = await findingsJSON(redact: policy.piiRedaction, gate: findingsGate)
+            guard let base = try? JSONSerialization.data(withJSONObject: payload) else { continue }
 
-            do {
-                try await pushToCloud(payload: payload, bearer: bearer)
-                if nextCursor != activityCursor {
-                    activityCursor = nextCursor
-                    saveCursor(activityCursor)
-                }
-                let n = (payload["events"] as? [[String: Any]])?.count ?? 0
-                if n > 0 {
-                    Logger.storage.info("CloudPusher: push OK (\(n) events, cursor=\(activityCursor))")
+            let sent = await pushWithHeals(
+                base: base, findings: findings, url: apiURL, bearer: bearer, cursorForLog: activityCursor
+            )
+            guard let response = sent.response, response.status == 200 else {
+                if let status = sent.response?.status {
+                    Logger.storage.warning("CloudPusher: push failed HTTP \(status) (cursor=\(activityCursor))")
                 } else {
-                    Logger.storage.debug("CloudPusher: push OK")
+                    Logger.storage.debug("CloudPusher: push not confirmed (failed or timed out) — cursors unchanged")
                 }
-            } catch {
-                Logger.storage.warning("CloudPusher: push failed (cursor=\(activityCursor)) — \(error)")
+                continue
+            }
+            if nextCursor != activityCursor {
+                activityCursor = nextCursor
+                saveCursor(activityCursor)
+            }
+            findingsGate.sent(revision: sent.findings?.revision)
+            let rejected = IngestPayload.rejected(in: response.body) ?? .init(heals: 0, findings: 0)
+            if rejected.heals > 0 || rejected.findings > 0 {
+                Logger.storage.warning("CloudPusher: ingest rejected heals=\(rejected.heals) findings=\(rejected.findings)")
+            }
+            let n = (payload["events"] as? [[String: Any]])?.count ?? 0
+            let m = sent.findings?.count ?? 0
+            if n > 0 || sent.heals > 0 || m > 0 {
+                Logger.storage.info("CloudPusher: push OK (\(n) events, heals=\(sent.heals) findings=\(m) rejected=\(rejected.heals)/\(rejected.findings), cursor=\(activityCursor))")
+            } else {
+                Logger.storage.debug("CloudPusher: push OK")
             }
         }
     }
@@ -320,25 +337,6 @@ struct CloudPusher: Service {
         return ["metrics": metrics, "events": eventDicts]
     }
 
-    private func pushToCloud(payload: [String: Any], bearer: String) async throws {
-        let data = try JSONSerialization.data(withJSONObject: payload)
-        var request = URLRequest(url: URL(string: apiURL)!)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
-        if let deviceId = DeviceIdentity.load()?.deviceId {
-            request.setValue(deviceId, forHTTPHeaderField: "X-Heald-Device-Id")
-        }
-        request.httpBody = data
-        request.timeoutInterval = 10
-
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-            throw CloudError.pushFailed(statusCode: code)
-        }
-    }
-
     private func processEntryDict(_ p: ProcessEntry) -> [String: Any] {
         ["pid": p.pid, "name": p.name, "cpuPercent": p.cpuPercent,
          "ramMB": round(Double(p.ramBytes) / 1_048_576 * 10) / 10, "system": p.isSystem]
@@ -368,10 +366,6 @@ struct CloudPusher: Service {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try? String(offset).write(to: cursorURL, atomically: true, encoding: .utf8)
     }
-}
-
-private enum CloudError: Error {
-    case pushFailed(statusCode: Int)
 }
 
 private func machineName() -> String {
