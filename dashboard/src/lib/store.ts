@@ -33,7 +33,6 @@ export type { ActivityEntry, BenchmarkResult, MachineMetrics, ProcessEntry } fro
 
 const MAX_HISTORY_PER_MACHINE = 720;
 const MAX_BENCHMARK_HISTORY = 90;
-const PERSIST_MIN_INTERVAL_MS = 2000;
 const CACHE_FILE = join(tmpdir(), "heald-store.json");
 const BLOB_PATHNAME = "heald-fleet-store.json";
 
@@ -139,15 +138,8 @@ async function hydrate() {
   s.hydrated = true;
 }
 
-async function persist(force = false) {
+async function persist() {
   const s = state();
-  const now = Date.now();
-  if (!force && now - s.lastPersistMs < PERSIST_MIN_INTERVAL_MS) {
-    // Still flush tmp so same-isolate reads are fresh
-    writeTmpCache(snapshotFromState(s));
-    return;
-  }
-  s.lastPersistMs = now;
   // Await blob so serverless does not freeze mid-write (merges remote state into s)
   await writeBlobCache(s);
   writeTmpCache(snapshotFromState(s));
@@ -158,79 +150,81 @@ export type WriteOptions = { persist?: boolean };
 
 /** Persist once after a batch of `{ persist: false }` writes (one blob write per ingest). */
 export async function flush() {
-  await persist(true);
+  await persist();
+}
+
+/** Hydrate, apply `change`, then persist unless the caller defers to flush(). */
+async function write(opts: WriteOptions, change: (s: StoreState) => void) {
+  await hydrate();
+  change(state());
+  if (opts.persist !== false) await persist();
+}
+
+function forMachine<T extends { machineId: string }>(all: T[], machineId: string | undefined, limit: number): T[] {
+  return (machineId ? all.filter((x) => x.machineId === machineId) : all).slice(0, limit);
 }
 
 export async function upsertMachine(data: MachineMetrics, opts: WriteOptions = {}) {
-  await hydrate();
-  const s = state();
-  const machineId = data.machineId || data.hostname || "unknown";
-  const payload: MachineMetrics = {
-    ...data,
-    machineId,
-    lastSeen: new Date().toISOString(),
-  };
-  s.machines.set(machineId, payload);
+  await write(opts, (s) => {
+    const machineId = data.machineId || data.hostname || "unknown";
+    const payload: MachineMetrics = {
+      ...data,
+      machineId,
+      lastSeen: new Date().toISOString(),
+    };
+    s.machines.set(machineId, payload);
 
-  const history = s.metricsHistory.get(machineId) ?? [];
-  history.push({
-    timestamp: payload.lastSeen,
-    cpu: data.cpu?.overall ?? 0,
-    ramUsedGB: data.ram?.usedGB ?? 0,
-  });
-  if (history.length > MAX_HISTORY_PER_MACHINE) {
-    history.splice(0, history.length - MAX_HISTORY_PER_MACHINE);
-  }
-  s.metricsHistory.set(machineId, history);
-
-  if (data.benchmark) {
-    const benchHistory = s.benchmarkHistory.get(machineId) ?? [];
-    const lastBench = benchHistory[benchHistory.length - 1];
-    if (!lastBench || lastBench.timestamp !== data.benchmark.timestamp) {
-      benchHistory.push(data.benchmark);
-      if (benchHistory.length > MAX_BENCHMARK_HISTORY) {
-        benchHistory.splice(0, benchHistory.length - MAX_BENCHMARK_HISTORY);
-      }
-      s.benchmarkHistory.set(machineId, benchHistory);
+    const history = s.metricsHistory.get(machineId) ?? [];
+    history.push({
+      timestamp: payload.lastSeen,
+      cpu: data.cpu?.overall ?? 0,
+      ramUsedGB: data.ram?.usedGB ?? 0,
+    });
+    if (history.length > MAX_HISTORY_PER_MACHINE) {
+      history.splice(0, history.length - MAX_HISTORY_PER_MACHINE);
     }
-  }
+    s.metricsHistory.set(machineId, history);
 
-  if (opts.persist !== false) await persist(true);
+    if (data.benchmark) {
+      const benchHistory = s.benchmarkHistory.get(machineId) ?? [];
+      const lastBench = benchHistory[benchHistory.length - 1];
+      if (!lastBench || lastBench.timestamp !== data.benchmark.timestamp) {
+        benchHistory.push(data.benchmark);
+        if (benchHistory.length > MAX_BENCHMARK_HISTORY) {
+          benchHistory.splice(0, benchHistory.length - MAX_BENCHMARK_HISTORY);
+        }
+        s.benchmarkHistory.set(machineId, benchHistory);
+      }
+    }
+  });
 }
 
 export async function addEvent(entry: ActivityEntry, opts: WriteOptions = {}) {
-  await hydrate();
-  const s = state();
-  pushEvent(s, entry);
-  if (opts.persist !== false) await persist(true);
+  await write(opts, (s) => pushEvent(s, entry));
 }
 
 /** Store validated heal reports (caller validates); dedupe by id, cap 5000. */
 export async function addHeals(heals: HealReport[], opts: WriteOptions = {}) {
-  await hydrate();
-  const s = state();
-  s.heals = applyHeals(s.heals, heals);
-  if (opts.persist !== false) await persist(true);
+  await write(opts, (s) => {
+    s.heals = applyHeals(s.heals, heals);
+  });
 }
 
 /** Upsert validated findings by (machineId, fingerprint), cap 500 per machine. */
 export async function addFindings(findings: Finding[], opts: WriteOptions = {}) {
-  await hydrate();
-  const s = state();
-  s.findings = applyFindings(s.findings, findings);
-  if (opts.persist !== false) await persist(true);
+  await write(opts, (s) => {
+    s.findings = applyFindings(s.findings, findings);
+  });
 }
 
 export async function getHeals(machineId?: string, limit = 50): Promise<HealReport[]> {
   await hydrate();
-  const all = state().heals;
-  return (machineId ? all.filter((h) => h.machineId === machineId) : all).slice(0, limit);
+  return forMachine(state().heals, machineId, limit);
 }
 
 export async function getFindings(machineId?: string, limit = 50): Promise<Finding[]> {
   await hydrate();
-  const all = state().findings;
-  return (machineId ? all.filter((f) => f.machineId === machineId) : all).slice(0, limit);
+  return forMachine(state().findings, machineId, limit);
 }
 
 /** Fleet "Fehlerbild" computed over the full heal + finding buckets. */
@@ -247,10 +241,7 @@ export async function getMachines(): Promise<MachineMetrics[]> {
 
 export async function getEvents(machineId?: string, limit = 50): Promise<ActivityEntry[]> {
   await hydrate();
-  const filtered = machineId
-    ? state().events.filter((e) => e.machineId === machineId)
-    : state().events;
-  return filtered.slice(0, limit);
+  return forMachine(state().events, machineId, limit);
 }
 
 export async function getHistory(machineId: string): Promise<HistoryPoint[]> {

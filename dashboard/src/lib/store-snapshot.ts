@@ -111,7 +111,6 @@ export type StoreState = {
   heals: HealReport[];
   findings: Finding[];
   hydrated: boolean;
-  lastPersistMs: number;
 };
 
 export const MAX_EVENTS = 1000;
@@ -125,7 +124,6 @@ export function createState(): StoreState {
     heals: [],
     findings: [],
     hydrated: false,
-    lastPersistMs: 0,
   };
 }
 
