@@ -1,8 +1,10 @@
 import Foundation
+import HealdCore
 import ServiceLifecycle
 import OSLog
 
-/// Pushes metrics + activity events to the cloud dashboard API (CLOUD-02, CLOUD-04).
+/// Pushes metrics + activity events to the cloud dashboard API (CLOUD-02, CLOUD-04),
+/// plus heal reports (`HealReportOutbox`, ≤ 100 per push) and the findings snapshot (GOAL 3).
 /// Activity is read from `ActivityLog` via a durable byte-offset cursor (no re-send).
 struct CloudPusher: Service {
     let store: MetricsStore
@@ -28,6 +30,7 @@ struct CloudPusher: Service {
             }
         }
 
+        var findingsGate = FindingsPushGate()
         while true {
             try await Task.sleep(for: Self.pushInterval)
 
@@ -47,21 +50,39 @@ struct CloudPusher: Service {
                 nextCursor: &nextCursor,
                 redact: policy.piiRedaction
             )
+            let findings = await findingsJSON(redact: policy.piiRedaction, gate: findingsGate)
+            guard let base = try? JSONSerialization.data(withJSONObject: payload) else { continue }
 
-            do {
-                try await pushToCloud(payload: payload, bearer: bearer)
-                if nextCursor != activityCursor {
-                    activityCursor = nextCursor
-                    saveCursor(activityCursor)
+            // One POST per cycle: heals ride along through the outbox (cursor advances only on 200).
+            let url = apiURL
+            let cursorForLog = activityCursor
+            let pushed = PushFlag()
+            let heals = await HealReportOutbox.shared.flush(limit: HealReportOutbox.maxBatch) { batch in
+                do {
+                    let body = try Self.body(base: base, heals: batch, findings: findings?.data)
+                    try await Self.pushToCloud(body: body, url: url, bearer: bearer)
+                    pushed.set()
+                    return true
+                } catch {
+                    Logger.storage.warning("CloudPusher: push failed (cursor=\(cursorForLog)) — \(error)")
+                    return false
                 }
-                let n = (payload["events"] as? [[String: Any]])?.count ?? 0
-                if n > 0 {
-                    Logger.storage.info("CloudPusher: push OK (\(n) events, cursor=\(activityCursor))")
-                } else {
-                    Logger.storage.debug("CloudPusher: push OK")
-                }
-            } catch {
-                Logger.storage.warning("CloudPusher: push failed (cursor=\(activityCursor)) — \(error)")
+            }
+            guard pushed.isSet else {
+                Logger.storage.debug("CloudPusher: push not confirmed (failed or timed out) — cursors unchanged")
+                continue
+            }
+            if nextCursor != activityCursor {
+                activityCursor = nextCursor
+                saveCursor(activityCursor)
+            }
+            findingsGate.sent(revision: findings?.revision)
+            let n = (payload["events"] as? [[String: Any]])?.count ?? 0
+            let m = findings?.count ?? 0
+            if n > 0 || heals > 0 || m > 0 {
+                Logger.storage.info("CloudPusher: push OK (\(n) events, heals=\(heals) findings=\(m), cursor=\(activityCursor))")
+            } else {
+                Logger.storage.debug("CloudPusher: push OK")
             }
         }
     }
@@ -320,9 +341,9 @@ struct CloudPusher: Service {
         return ["metrics": metrics, "events": eventDicts]
     }
 
-    private func pushToCloud(payload: [String: Any], bearer: String) async throws {
-        let data = try JSONSerialization.data(withJSONObject: payload)
-        var request = URLRequest(url: URL(string: apiURL)!)
+    private static func pushToCloud(body data: Data, url: String, bearer: String) async throws {
+        guard let endpoint = URL(string: url) else { throw CloudError.pushFailed(statusCode: -1) }
+        var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
