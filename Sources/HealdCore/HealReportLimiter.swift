@@ -7,7 +7,7 @@ import Foundation
 public struct HealReportLimiter: Sendable {
     public static let interval: TimeInterval = 3600
     public static let collapsedOutcomes: Set<HealOutcome> = [.blockedConsent, .advisorDeferred, .advisorSkipped]
-    public static let collapsedActions: Set<String> = ["cpu_storm", "battery_guard"]
+    public static let collapsedActions: Set<String> = [DirectHeal.cpuStorm.rawValue, DirectHeal.batteryGuard.rawValue]
 
     private var last: [String: Date] = [:]
     private var suppressed: [String: Int] = [:]

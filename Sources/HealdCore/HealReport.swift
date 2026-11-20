@@ -175,7 +175,7 @@ public enum DirectHeal: String, Sendable, CaseIterable {
         HealReport(
             machineId: machineId, healdVersion: healdVersion, action: action.rawValue, trigger: trigger,
             consent: consent,
-            outcome: HealOutcome.from(.ran, approved: false, succeeded: succeeded) ?? .executedFailed,
+            outcome: succeeded ? .executedOk : .executedFailed,
             durationMs: durationMs, findingFingerprint: nil, detail: detail,
             advisor: HealAdvisor(source: .rules, recommendation: .proceed, confidence: 0,
                                  rationale: "direct heal (\(action.rawValue)), no advisor", latencyMs: 0),
