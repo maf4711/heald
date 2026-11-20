@@ -17,6 +17,7 @@ struct SelfHealOrchestrator: Service {
     private let cleaner = SystemCleaner()
     private let deepClean = DeepClean()
     private let perf = PerformanceHealer()
+    private let scannerRemediation = ScannerRemediation()
 
     private let cooldowns: [String: TimeInterval] = [
         "ram_purge": 600,
@@ -28,6 +29,8 @@ struct SelfHealOrchestrator: Service {
         "notify_thermal": 1800,
         "brew_light": 7200,
         "perf_autoheal": 300,
+        "app_restart": 60,
+        "dns_flush": 600,
     ]
 
     private let batteryGuardian = BatteryGuardian()
@@ -196,7 +199,31 @@ struct SelfHealOrchestrator: Service {
             await self.proactive.run(activityLog: self.activityLog)
         }
 
+        // 7) Device findings (SystemErrorScanner) — fixes run only through the consent gate in fire
+        await healScannerFindings(state: state, policy: policy, memoryCritical: memoryCritical, budget: &budget)
+
         await writeStatus(state: state, ram: ram, disk: disk, policy: policy)
+    }
+
+    /// Drain scanner-requested `app_restart` / `dns_flush` and run them via `fire`
+    /// (advisor + cooldown + consent: consent=log logs BLOCKED and never executes).
+    private func healScannerFindings(
+        state: HealCooldownState,
+        policy: PolicyPack,
+        memoryCritical: Bool,
+        budget: inout AdvisorBudget
+    ) async {
+        for healAction in [HealdCore.HealAction.appRestart, .dnsFlush] {
+            let key = healAction.rawValue
+            // Leave requests queued while the cooldown runs instead of dropping them.
+            guard await state.canFire(key: key, cooldown: cooldowns[key] ?? 900) else { continue }
+            let requests = await FindingsStore.shared.drain(healAction)
+            guard !requests.isEmpty else { continue }
+            let reason = "\(key) for \(requests.map(\.target).joined(separator: ", "))"
+            await fire(state: state, key: key, reason: reason, policy: policy, memoryCritical: memoryCritical, budget: &budget) {
+                await self.scannerRemediation.run(healAction, requests, activityLog: self.activityLog)
+            }
+        }
     }
 
     private func fire(
