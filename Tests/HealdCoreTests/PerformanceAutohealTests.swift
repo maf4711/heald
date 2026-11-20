@@ -65,6 +65,7 @@ struct PerformanceAutohealTests {
             home: home
         ) == false)
     }
+
     @Test func shouldFireWhenDegradedEnabledAndSelfHealOn() {
         #expect(PerformanceAutoheal.shouldFire(degraded: true, enabled: true, selfHealEnabled: true) == true)
     }
