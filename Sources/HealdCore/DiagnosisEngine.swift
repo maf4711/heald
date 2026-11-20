@@ -140,7 +140,7 @@ public struct DiagnosisEngine: Sendable {
         let sample = Self.cap(SecretRedactor.redact(Self.redactPaths(o.sample)), Finding.maxSample)
         revision += 1
         let source = Self.cap(o.source.rawValue, Finding.maxSourceChars)
-        let severity = Self.severity(category: o.category, component: o.component)
+        let severity = o.severityOverride ?? Self.severity(category: o.category, component: o.component)
 
         guard var f = byFingerprint[fp] else {
             byFingerprint[fp] = Finding(

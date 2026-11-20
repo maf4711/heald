@@ -49,10 +49,17 @@ extension DiagnosisEngine {
                 signature: "",
                 source: .launchd,
                 at: at,
-                sample: "launchd job \(label) last exit status \(code)"
+                sample: "launchd job \(label) last exit status \(code)",
+                severityOverride: Self.launchdSeverity(label: label, code: code)
             ))
         }
         previous = current
+    }
+
+    /// SIGKILL (-9) of an Apple agent is almost always jetsam / memory pressure → warning;
+    /// every other failure (incl. -9 of third-party jobs) stays error.
+    public static func launchdSeverity(label: String, code: Int) -> FindingSeverity {
+        code == -9 && label.hasPrefix("com.apple.") ? .warning : .error
     }
 
     /// Seed for `previous` after a daemon restart: label → exit status of open launchd findings,

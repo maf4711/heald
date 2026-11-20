@@ -44,6 +44,8 @@ public struct Observation: Sendable, Equatable {
     public var source: FindingSource
     public var at: Date
     public var sample: String
+    /// Source-specific severity (e.g. launchd exit code); nil → the fixed category table.
+    public var severityOverride: FindingSeverity?
 
     public init(
         category: FindingCategory,
@@ -51,7 +53,8 @@ public struct Observation: Sendable, Equatable {
         signature: String,
         source: FindingSource,
         at: Date,
-        sample: String
+        sample: String,
+        severityOverride: FindingSeverity? = nil
     ) {
         self.category = category
         self.component = component
@@ -59,6 +62,7 @@ public struct Observation: Sendable, Equatable {
         self.source = source
         self.at = at
         self.sample = sample
+        self.severityOverride = severityOverride
     }
 }
 
