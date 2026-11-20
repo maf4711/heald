@@ -213,22 +213,13 @@ struct SelfHealOrchestrator: Service {
 
         // Advisor (Apple FM, on-device): may only downgrade proceed → defer/skip. Never executes.
         if let healAction = HealdCore.HealAction(rawValue: key) {
-            let ai = self.ai
-            let context = "cooldown=\(Int(cd))s consent=\(policy.consent.rawValue)"
-            let verdict: AdvisorVerdict
-            if let timeout = budget.nextTimeout() {
-                verdict = await AutohealAdvisor.consult(
-                    ruleAction: healAction,
-                    timeout: timeout,
-                    available: await ai.isAvailable,
-                    memoryCritical: memoryCritical
-                ) {
-                    await ai.adviseHeal(action: key, reason: reason, context: context)
-                }
-                budget.record(verdict)
-            } else {
-                verdict = .rulesFallback(healAction, rationale: "advisor budget/circuit open this tick")
-            }
+            let verdict = await advise(
+                healAction,
+                reason: reason,
+                context: "cooldown=\(Int(cd))s consent=\(policy.consent.rawValue)",
+                memoryCritical: memoryCritical,
+                budget: &budget
+            )
             await logAdvice(verdict)
             switch AutohealAdvisor.disposition(verdict, cooldown: cd) {
             case .run:
@@ -296,6 +287,30 @@ struct SelfHealOrchestrator: Service {
             )
             await WebhookNotifier.shared.emit(title: key, text: reason, severity: "info")
         }
+    }
+
+    /// Consult Apple FM within this tick's budget; rules fallback once the budget/breaker is spent.
+    private func advise(
+        _ healAction: HealdCore.HealAction,
+        reason: String,
+        context: String,
+        memoryCritical: Bool,
+        budget: inout AdvisorBudget
+    ) async -> AdvisorVerdict {
+        guard let timeout = budget.nextTimeout() else {
+            return .rulesFallback(healAction, rationale: "advisor budget/circuit open this tick")
+        }
+        let ai = self.ai
+        let verdict = await AutohealAdvisor.consult(
+            ruleAction: healAction,
+            timeout: timeout,
+            available: await ai.isAvailable,
+            memoryCritical: memoryCritical
+        ) {
+            await ai.adviseHeal(action: healAction.rawValue, reason: reason, context: context)
+        }
+        budget.record(verdict)
+        return verdict
     }
 
     private func logAdvice(_ v: AdvisorVerdict) async {
