@@ -3,10 +3,12 @@ import OSLog
 
 /// Battery health degradation early warning.
 struct BatteryGuardian {
-    func evaluate(store: MetricsStore, activityLog: ActivityLog, policy: PolicyPack) async {
-        guard policy.batteryGuardian else { return }
+    /// Returns the alert text when the guardian acted (warned), nil otherwise.
+    @discardableResult
+    func evaluate(store: MetricsStore, activityLog: ActivityLog, policy: PolicyPack) async -> String? {
+        guard policy.batteryGuardian else { return nil }
         let b = await store.battery
-        guard b.isPresent, b.timestamp != .distantPast else { return }
+        guard b.isPresent, b.timestamp != .distantPast else { return nil }
 
         var warnings: [String] = []
         if b.maxCapacityPercent < policy.batteryHealthMinPct {
@@ -19,7 +21,7 @@ struct BatteryGuardian {
             warnings.append("condition=\(b.condition)")
         }
 
-        guard !warnings.isEmpty else { return }
+        guard !warnings.isEmpty else { return nil }
 
         let msg = warnings.joined(separator: "; ")
         Logger.health.warning("Battery guardian: \(msg)")
@@ -31,5 +33,6 @@ struct BatteryGuardian {
         NotificationService.sendNotification(title: "heald battery", message: msg)
         await WebhookNotifier.shared.emit(title: "Battery", text: msg, severity: "warning")
         await FleetAck.record(action: "battery_warn", result: "alert", detail: msg)
+        return msg
     }
 }

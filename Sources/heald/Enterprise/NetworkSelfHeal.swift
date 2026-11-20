@@ -3,10 +3,13 @@ import OSLog
 
 /// Network self-heal: DNS flush + captive portal hint + high latency log.
 struct NetworkSelfHeal {
-    func evaluate(store: MetricsStore, activityLog: ActivityLog, policy: PolicyPack) async {
-        guard policy.networkSelfHeal else { return }
+    /// Returns the DNS-flush result when it remediated (packet loss), nil when it only observed.
+    @discardableResult
+    func evaluate(store: MetricsStore, activityLog: ActivityLog, policy: PolicyPack) async -> (succeeded: Bool, detail: String)? {
+        guard policy.networkSelfHeal else { return nil }
         let net = await store.network
-        guard net.timestamp != .distantPast else { return }
+        guard net.timestamp != .distantPast else { return nil }
+        var acted: (succeeded: Bool, detail: String)?
 
         // High latency to gateway
         if let lat = net.latencyMs, lat > 200 {
@@ -21,7 +24,7 @@ struct NetworkSelfHeal {
         if let loss = net.packetLossPercent, loss > 5 {
             Logger.health.warning("Packet loss \(loss)% — flushing DNS")
             if policy.allowsRemediation() {
-                flushDNS()
+                acted = (flushDNS(), "DNS flush after \(loss)% packet loss")
                 try? await activityLog.log(event: ActivityEvent(
                     type: .dnsFlushed,
                     summary: "DNS flush after \(loss)% packet loss"
@@ -41,15 +44,16 @@ struct NetworkSelfHeal {
                 message: "Network may need browser login (captive portal)"
             )
         }
+        return acted
     }
 
-    private func flushDNS() {
+    private func flushDNS() -> Bool {
         if SudoTicket.hasTicket() {
-            _ = SudoTicket.runPrivileged("/usr/bin/dscacheutil", arguments: ["-flushcache"])
+            let ok = SudoTicket.runPrivileged("/usr/bin/dscacheutil", arguments: ["-flushcache"]).succeeded
             _ = SudoTicket.runPrivileged("/usr/bin/killall", arguments: ["-HUP", "mDNSResponder"])
-        } else {
-            _ = ShellRunner.run("/usr/bin/dscacheutil", arguments: ["-flushcache"])
+            return ok
         }
+        return ShellRunner.run("/usr/bin/dscacheutil", arguments: ["-flushcache"]).succeeded
     }
 
     private func captiveLikely() async -> Bool {

@@ -16,7 +16,7 @@ struct SelfHealOrchestrator: Service {
     private let ramPurge = RAMPurge()
     private let cleaner = SystemCleaner()
     private let deepClean = DeepClean()
-    private let perf = PerformanceHealer()
+    let perf = PerformanceHealer()
     let scannerRemediation = ScannerRemediation()
 
     private let cooldowns: [String: TimeInterval] = [
@@ -35,9 +35,9 @@ struct SelfHealOrchestrator: Service {
 
     func cooldown(for key: String) -> TimeInterval { cooldowns[key] ?? 900 }
 
-    private let batteryGuardian = BatteryGuardian()
-    private let networkHeal = NetworkSelfHeal()
-    private let safeUpdate = SafeSoftwareUpdate()
+    let batteryGuardian = BatteryGuardian()
+    let networkHeal = NetworkSelfHeal()
+    let safeUpdate = SafeSoftwareUpdate()
 
     func run() async throws {
         Logger.healer.info("SelfHealOrchestrator started (enterprise native — no Meister)")
@@ -80,10 +80,8 @@ struct SelfHealOrchestrator: Service {
             return
         }
 
-        // CPU storm (HUD dupes / leaked it2) every tick — not gated by consent=log.
-        if policy.allowsPerformanceRemediation() {
-            _ = await self.perf.healCpuStorm(activityLog: self.activityLog)
-        }
+        // CPU storm, battery, network, softwareupdate: heals outside fire (own gates), reported directly.
+        await runDirectHeals(policy: policy, tick: tick)
 
         let ram = await store.ram
         let disk = await store.disk
@@ -92,16 +90,6 @@ struct SelfHealOrchestrator: Service {
         let cpu = await store.cpu
         let memoryCritical = AutohealAdvisor.isMemoryCritical(pressureLevel: ram.pressureLevel)
         var budget = AdvisorBudget()
-
-        // Battery + network every ~3 min
-        if tick % 4 == 0 {
-            await batteryGuardian.evaluate(store: store, activityLog: activityLog, policy: policy)
-            await networkHeal.evaluate(store: store, activityLog: activityLog, policy: policy)
-        }
-        // Safe softwareupdate hourly-ish
-        if tick % 80 == 0 {
-            await safeUpdate.maybeRun(activityLog: activityLog, policy: policy)
-        }
 
         // 0) Performance stampede — high load or first tick after boot settle
         let degraded = PerformanceAutoheal.isDegraded(
@@ -352,7 +340,7 @@ struct SelfHealOrchestrator: Service {
         case .executedFailed: "action reported failure"
         case .executedOk, .approvedExecuted: nil
         }
-        let report = HealReport(
+        await Self.appendHealReport(HealReport(
             machineId: DeviceIdentity.machineId(),
             healdVersion: HealdApp.version,
             action: key,
@@ -364,7 +352,11 @@ struct SelfHealOrchestrator: Service {
             detail: detail,
             advisor: HealAdvisor(advisor),
             redact: PIIRedactor.redact
-        )
+        ))
+    }
+
+    /// Single sink for every heal report (fire decisions and direct heals).
+    static func appendHealReport(_ report: HealReport) async {
         await HealReportOutbox.shared.append(report)
     }
 

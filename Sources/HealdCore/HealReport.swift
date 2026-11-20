@@ -35,6 +35,17 @@ public struct HealAdvisor: Codable, Sendable, Equatable {
     public var rationale: String
     public var latencyMs: Int
 
+    public init(
+        source: AdvisorSource, recommendation: AdvisorRecommendation,
+        confidence: Double, rationale: String, latencyMs: Int
+    ) {
+        self.source = source
+        self.recommendation = recommendation
+        self.confidence = confidence
+        self.rationale = rationale
+        self.latencyMs = latencyMs
+    }
+
     public init(_ v: AdvisorVerdict) {
         source = v.source
         recommendation = v.recommendation
@@ -139,5 +150,36 @@ public struct HealReport: Codable, Sendable, Equatable {
         try c.encode(findingFingerprint, forKey: .findingFingerprint) // explicit null: no linked finding
         try c.encodeIfPresent(detail, forKey: .detail)
         try c.encode(advisor, forKey: .advisor)
+    }
+}
+
+/// Heals that run outside `SelfHealOrchestrator.fire` (no advisor, no consent gate of their own).
+/// Reported only when the sub-healer actually acted, with gate `.ran` and a rules advisor.
+public enum DirectHeal: String, Sendable, CaseIterable {
+    case cpuStorm = "cpu_storm"
+    case batteryGuard = "battery_guard"
+    case networkHeal = "network_heal"
+    case safeUpdate = "safe_update"
+
+    public static func report(
+        _ action: DirectHeal,
+        machineId: String,
+        healdVersion: String,
+        trigger: String,
+        consent: HealConsent,
+        succeeded: Bool,
+        durationMs: Int,
+        detail: String? = nil,
+        redact: (String) -> String = { $0 }
+    ) -> HealReport {
+        HealReport(
+            machineId: machineId, healdVersion: healdVersion, action: action.rawValue, trigger: trigger,
+            consent: consent,
+            outcome: HealOutcome.from(.ran, approved: false, succeeded: succeeded) ?? .executedFailed,
+            durationMs: durationMs, findingFingerprint: nil, detail: detail,
+            advisor: HealAdvisor(source: .rules, recommendation: .proceed, confidence: 0,
+                                 rationale: "direct heal (\(action.rawValue)), no advisor", latencyMs: 0),
+            redact: redact
+        )
     }
 }

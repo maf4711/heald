@@ -85,7 +85,14 @@ struct MaintenanceService: Service {
             // Safe softwareupdate inside maintenance window (policy opt-in)
             if minute < 5 {
                 let policy = await PolicyStore.shared.current()
-                await SafeSoftwareUpdate().maybeRun(activityLog: activityLog, policy: policy)
+                let start = ContinuousClock.now
+                if let r = await SafeSoftwareUpdate().maybeRun(activityLog: activityLog, policy: policy) {
+                    await SelfHealOrchestrator.recordDirectHeal(
+                        .safeUpdate, reason: "maintenance window", succeeded: r.succeeded,
+                        durationMs: SelfHealOrchestrator.ms(ContinuousClock.now - start),
+                        detail: r.summary, policy: policy
+                    )
+                }
             }
         }
     }

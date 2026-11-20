@@ -99,3 +99,32 @@ struct HealReportLimiterTests {
         #expect(DiagnosisEngine.cap(String(repeating: "🔥", count: 10), 5).utf16.count == 4)
     }
 }
+
+/// Reviewer fix 4: heals outside `fire` report through the same path with a rules advisor.
+struct DirectHealReportTests {
+    @Test func directHealKeysPassTheDashboardValidator() throws {
+        #expect(DirectHeal.allCases.map(\.rawValue) == ["cpu_storm", "battery_guard", "network_heal", "safe_update"])
+        for action in DirectHeal.allCases {
+            for ok in [true, false] {
+                let r = DirectHeal.report(
+                    action, machineId: "node-a", healdVersion: "3.5.0", trigger: "t", consent: .log,
+                    succeeded: ok, durationMs: 12, detail: "killed HUD:123"
+                )
+                #expect(r.outcome == (ok ? .executedOk : .executedFailed))
+                #expect(r.advisor.source == .rules && r.advisor.recommendation == .proceed && r.advisor.confidence == 0)
+                let obj = try JSONSerialization.jsonObject(with: DiagnosisEngine.encoder().encode(r))
+                #expect(validateHealReport(obj) == nil)
+            }
+        }
+    }
+
+    @Test func cpuStormSuccessCollapsesButNetworkHealDoesNot() {
+        var limiter = HealReportLimiter()
+        func make(_ a: DirectHeal) -> HealReport {
+            DirectHeal.report(a, machineId: "m", healdVersion: "v", trigger: "t", consent: .auto, succeeded: true, durationMs: 1)
+        }
+        var a = make(.cpuStorm), b = make(.cpuStorm), c = make(.networkHeal), d = make(.networkHeal)
+        let r = (limiter.admit(&a), limiter.admit(&b), limiter.admit(&c), limiter.admit(&d))
+        #expect(r == (true, false, true, true))
+    }
+}
