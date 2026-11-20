@@ -294,10 +294,9 @@ struct SelfHealOrchestrator: Service {
             summary: "Self-heal \(key): \(reason)"
         ))
 
-        let clock = ContinuousClock()
-        let start = clock.now
+        let start = ContinuousClock.now
         succeeded = await action()
-        durationMs = Int((clock.now - start) / .milliseconds(1))
+        durationMs = Self.ms(since: start)
         await state.markFired(key: key)
 
         try? await activityLog.log(event: ActivityEvent(
@@ -340,12 +339,12 @@ struct SelfHealOrchestrator: Service {
         case .executedFailed: "action reported failure"
         case .executedOk, .approvedExecuted: nil
         }
-        await Self.appendHealReport(HealReport(
+        await HealReportOutbox.shared.append(HealReport(
             machineId: DeviceIdentity.machineId(),
             healdVersion: HealdApp.version,
             action: key,
             trigger: reason,
-            consent: HealConsent(rawValue: policy.consent.rawValue) ?? .log,
+            consent: policy.healConsent,
             outcome: outcome,
             durationMs: durationMs,
             findingFingerprint: findingFingerprint,
@@ -353,11 +352,6 @@ struct SelfHealOrchestrator: Service {
             advisor: HealAdvisor(advisor),
             redact: PIIRedactor.redact
         ))
-    }
-
-    /// Single sink for every heal report (fire decisions and direct heals).
-    static func appendHealReport(_ report: HealReport) async {
-        await HealReportOutbox.shared.append(report)
     }
 
     /// Consult Apple FM within this tick's budget; rules fallback once the budget/breaker is spent.

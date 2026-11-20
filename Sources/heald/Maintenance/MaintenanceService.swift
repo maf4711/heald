@@ -89,8 +89,7 @@ struct MaintenanceService: Service {
                 if let r = await SafeSoftwareUpdate().maybeRun(activityLog: activityLog, policy: policy) {
                     await SelfHealOrchestrator.recordDirectHeal(
                         .safeUpdate, reason: "maintenance window", succeeded: r.succeeded,
-                        durationMs: SelfHealOrchestrator.ms(ContinuousClock.now - start),
-                        detail: r.summary, policy: policy
+                        since: start, detail: r.summary, policy: policy
                     )
                 }
             }
