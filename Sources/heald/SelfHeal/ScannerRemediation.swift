@@ -5,20 +5,24 @@ import OSLog
 /// Executes scanner-requested fixes. Only ever called from inside `SelfHealOrchestrator.fire`,
 /// i.e. after the advisor, cooldown and consent gate (consent=log never reaches this code).
 struct ScannerRemediation {
-    func run(_ action: HealdCore.HealAction, _ requests: [RemediationRequest], activityLog: ActivityLog) async {
+    /// True when every request was remediated.
+    func run(_ action: HealdCore.HealAction, _ requests: [RemediationRequest], activityLog: ActivityLog) async -> Bool {
         switch action {
         case .appRestart:
-            for r in requests { await relaunch(r, activityLog: activityLog) }
+            var ok = true
+            for r in requests where !(await relaunch(r, activityLog: activityLog)) { ok = false }
+            return ok
         case .dnsFlush:
-            await flushDNS(requests, activityLog: activityLog)
+            return await flushDNS(requests, activityLog: activityLog)
         default:
             Logger.healer.error("ScannerRemediation: unsupported action \(action.rawValue)")
+            return false
         }
     }
 
-    private func relaunch(_ r: RemediationRequest, activityLog: ActivityLog) async {
+    private func relaunch(_ r: RemediationRequest, activityLog: ActivityLog) async -> Bool {
         let app = r.target
-        guard DiagnosisEngine.restartableApps.contains(app) else { return }
+        guard DiagnosisEngine.restartableApps.contains(app) else { return false }
         // Already back (launchd relaunched it) counts as healed; otherwise open it.
         let ok = isRunning(app)
             || ShellRunner.run("/usr/bin/open", arguments: ["-a", app], timeoutSeconds: 10).succeeded
@@ -30,9 +34,10 @@ struct ScannerRemediation {
             afterState: ok ? "running" : "still down"
         ))
         await FindingsStore.shared.recordHeal(r, succeeded: ok)
+        return ok
     }
 
-    private func flushDNS(_ requests: [RemediationRequest], activityLog: ActivityLog) async {
+    private func flushDNS(_ requests: [RemediationRequest], activityLog: ActivityLog) async -> Bool {
         let ok = ShellRunner.run("/usr/bin/dscacheutil", arguments: ["-flushcache"], timeoutSeconds: 5).succeeded
         _ = ShellRunner.run("/usr/bin/killall", arguments: ["-HUP", "mDNSResponder"], timeoutSeconds: 3)
         try? await activityLog.log(event: ActivityEvent(
@@ -41,6 +46,7 @@ struct ScannerRemediation {
             detail: requests.flatMap(\.fingerprints).sorted().joined(separator: ", ")
         ))
         for r in requests { await FindingsStore.shared.recordHeal(r, succeeded: ok) }
+        return ok
     }
 
     private func isRunning(_ name: String) -> Bool {

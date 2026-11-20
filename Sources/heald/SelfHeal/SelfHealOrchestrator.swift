@@ -50,6 +50,7 @@ struct SelfHealOrchestrator: Service {
             var bootBudget = AdvisorBudget()
             await fire(state: state, key: "proactive_heal", reason: "boot hygiene", policy: policy0, budget: &bootBudget) {
                 await self.proactive.run(activityLog: self.activityLog)
+                return true
             }
             if PerformanceAutoheal.isEnabled(policy0.performanceAutohealEnabled) {
                 await fire(state: state, key: "perf_autoheal", reason: "boot settle", policy: policy0, budget: &bootBudget) {
@@ -58,6 +59,7 @@ struct SelfHealOrchestrator: Service {
                         cpuOverall: 1,
                         force: true
                     )
+                    return true
                 }
             }
         }
@@ -119,6 +121,7 @@ struct SelfHealOrchestrator: Service {
                     cpuOverall: cpu.overall,
                     force: true
                 )
+                return true
             }
         }
 
@@ -127,10 +130,12 @@ struct SelfHealOrchestrator: Service {
            ram.pressureLevel >= policy.ramPressureMin {
             await fire(state: state, key: "ram_purge", reason: "RAM pressure=\(ram.pressureLevel)", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
                 await self.ramPurge.purge(activityLog: self.activityLog)
+                return true
             }
         } else if policy.ramPurgeEnabled, ram.timestamp != .distantPast, ram.swapUsed > 1_073_741_824 {
             await fire(state: state, key: "ram_purge", reason: "swap>\(Int(ram.swapUsed / 1_048_576))MB", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
                 await self.ramPurge.purge(activityLog: self.activityLog)
+                return true
             }
         }
 
@@ -141,16 +146,19 @@ struct SelfHealOrchestrator: Service {
             let freePct = Double(root.freeBytes) / Double(root.totalBytes) * 100
             if freePct < policy.diskFreePctWarn {
                 await fire(state: state, key: "disk_cleanup", reason: String(format: "disk free %.0f%%", freePct), policy: policy, memoryCritical: memoryCritical, budget: &budget) {
-                    try? await self.cleaner.cleanCaches(activityLog: self.activityLog)
-                    try? await self.cleaner.emptyTrash(activityLog: self.activityLog)
-                    try? await self.cleaner.cleanXcodeDerivedData(activityLog: self.activityLog)
-                    await FleetAck.record(action: "disk_cleanup", result: "ok", detail: String(format: "%.0f%% free", freePct))
+                    let caches = (try? await self.cleaner.cleanCaches(activityLog: self.activityLog)) != nil
+                    let trash = (try? await self.cleaner.emptyTrash(activityLog: self.activityLog)) != nil
+                    let derived = (try? await self.cleaner.cleanXcodeDerivedData(activityLog: self.activityLog)) != nil
+                    let ok = caches && trash && derived
+                    await FleetAck.record(action: "disk_cleanup", result: ok ? "ok" : "partial", detail: String(format: "%.0f%% free", freePct))
+                    return ok
                 }
             }
             if freePct < policy.diskFreePctCritical {
                 await fire(state: state, key: "deep_trim", reason: String(format: "disk critical %.0f%%", freePct), policy: policy, memoryCritical: memoryCritical, budget: &budget) {
                     await self.deepClean.run(activityLog: self.activityLog)
                     await self.autofix.brewCleanupLight(activityLog: self.activityLog)
+                    return true
                 }
             }
         }
@@ -167,6 +175,7 @@ struct SelfHealOrchestrator: Service {
                     if policy.ramPurgeEnabled {
                         await self.ramPurge.purge(activityLog: self.activityLog)
                     }
+                    return true
                 }
             case .nominal, .fair:
                 break
@@ -178,6 +187,7 @@ struct SelfHealOrchestrator: Service {
             await fire(state: state, key: "firewall_on", reason: "firewall disabled", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
                 await self.autofix.enableFirewall(activityLog: self.activityLog)
                 await WebhookNotifier.shared.emit(title: "Firewall", text: "Enforced enable", severity: "warning")
+                return true
             }
         }
 
@@ -193,12 +203,14 @@ struct SelfHealOrchestrator: Service {
                     text: "disabled on host",
                     severity: "critical"
                 )
+                return true
             }
         }
 
         // 6) Proactive
         await fire(state: state, key: "proactive_heal", reason: "scheduled proactive", policy: policy, memoryCritical: memoryCritical, budget: &budget) {
             await self.proactive.run(activityLog: self.activityLog)
+            return true
         }
 
         // 7) Device findings (SystemErrorScanner) — fixes run only through the consent gate in fire
@@ -208,6 +220,7 @@ struct SelfHealOrchestrator: Service {
     }
 
     /// Gate shared by every action: cooldown → advisor → consent → run.
+    /// Every decision past the cooldown appends one heal report; `action` returns whether it succeeded.
     @discardableResult
     func fire(
         state: HealCooldownState,
@@ -215,23 +228,37 @@ struct SelfHealOrchestrator: Service {
         reason: String,
         policy: PolicyPack,
         memoryCritical: Bool = false,
+        findingFingerprint: String? = nil,
         budget: inout AdvisorBudget,
-        action: @escaping () async -> Void
+        action: @escaping () async -> Bool
     ) async -> GateOutcome {
         let cd = cooldown(for: key)
         guard await state.canFire(key: key, cooldown: cd) else { return .cooldown }
+        var verdict: AdvisorVerdict?
+        var approved = false
+        var succeeded = false
+        var durationMs = 0
+        func report(_ gate: GateOutcome) async -> GateOutcome {
+            await recordHealReport(
+                gate, key: key, reason: reason, policy: policy, verdict: verdict,
+                approved: approved, succeeded: succeeded, durationMs: durationMs,
+                findingFingerprint: findingFingerprint
+            )
+            return gate
+        }
 
         // Advisor (Apple FM, on-device): may only downgrade proceed → defer/skip. Never executes.
         if let healAction = HealdCore.HealAction(rawValue: key) {
-            let verdict = await advise(
+            let v = await advise(
                 healAction,
                 reason: reason,
                 context: "cooldown=\(Int(cd))s consent=\(policy.consent.rawValue)",
                 memoryCritical: memoryCritical,
                 budget: &budget
             )
-            await logAdvice(verdict)
-            switch AutohealAdvisor.disposition(verdict, cooldown: cd) {
+            verdict = v
+            await logAdvice(v)
+            switch AutohealAdvisor.disposition(v, cooldown: cd) {
             case .run:
                 break // continue to the consent gate below
             case .defer(let retryAfter):
@@ -240,16 +267,16 @@ struct SelfHealOrchestrator: Service {
                     key: key,
                     at: AutohealAdvisor.cooldownMark(now: Date(), cooldown: cd, retryAfter: retryAfter)
                 )
-                return .advisorDeferred
+                return await report(.advisorDeferred)
             case .skip:
                 await state.markFired(key: key)
                 try? await activityLog.log(event: ActivityEvent(
                     type: .healingAttempt,
                     summary: "Self-heal SKIPPED by advisor: \(key)",
-                    detail: verdict.rationale,
-                    aiGenerated: verdict.source == .appleFM
+                    detail: v.rationale,
+                    aiGenerated: v.source == .appleFM
                 ))
-                return .advisorSkipped
+                return await report(.advisorSkipped)
             }
         }
 
@@ -257,6 +284,7 @@ struct SelfHealOrchestrator: Service {
         if !policy.allowsRemediation() {
             if policy.consent == .ask, ApprovalStore.consume(action: key) {
                 Logger.healer.info("Self-heal [\(key)]: approved one-shot — \(reason)")
+                approved = true
                 // fall through to remediate
             } else {
                 try? await activityLog.log(event: ActivityEvent(
@@ -271,7 +299,7 @@ struct SelfHealOrchestrator: Service {
                     )
                 }
                 await state.markFired(key: key) // avoid spam
-                return policy.consent == .ask ? .blockedAsk : .blockedLog
+                return await report(policy.consent == .ask ? .blockedAsk : .blockedLog)
             }
         }
 
@@ -281,15 +309,19 @@ struct SelfHealOrchestrator: Service {
             summary: "Self-heal \(key): \(reason)"
         ))
 
-        await action()
+        let clock = ContinuousClock()
+        let start = clock.now
+        succeeded = await action()
+        durationMs = Int((clock.now - start) / .milliseconds(1))
         await state.markFired(key: key)
 
         try? await activityLog.log(event: ActivityEvent(
-            type: .selfHealed,
-            summary: "Self-heal done: \(key)",
+            type: succeeded ? .selfHealed : .healingFailed,
+            summary: succeeded ? "Self-heal done: \(key)" : "Self-heal failed: \(key)",
             detail: reason
         ))
-        await FleetAck.record(action: key, result: "ok", detail: reason)
+        await FleetAck.record(action: key, result: succeeded ? "ok" : "failed", detail: reason)
+        _ = await report(.ran)
         if key != "proactive_heal" && key != "perf_autoheal" {
             NotificationService.sendNotification(
                 title: "heald self-heal",
@@ -298,6 +330,45 @@ struct SelfHealOrchestrator: Service {
             await WebhookNotifier.shared.emit(title: key, text: reason, severity: "info")
         }
         return .ran
+    }
+
+    /// One heal report per decision → `HealReportOutbox` (CloudPusher delivers it when cloud is allowed).
+    private func recordHealReport(
+        _ gate: GateOutcome,
+        key: String,
+        reason: String,
+        policy: PolicyPack,
+        verdict: AdvisorVerdict?,
+        approved: Bool,
+        succeeded: Bool,
+        durationMs: Int,
+        findingFingerprint: String?
+    ) async {
+        guard let outcome = HealOutcome.from(gate, approved: approved, succeeded: succeeded) else { return }
+        let advisor = verdict ?? AdvisorVerdict(
+            action: HealdCore.HealAction(rawValue: key) ?? .proactiveHeal, recommendation: .proceed,
+            confidence: 0, rationale: "no advisor for \(key)", source: .rules, latencyMs: 0
+        )
+        let detail: String? = switch outcome {
+        case .blockedConsent: "consent=\(policy.consent.rawValue)"
+        case .advisorSkipped, .advisorDeferred: advisor.rationale
+        case .executedFailed: "action reported failure"
+        case .executedOk, .approvedExecuted: nil
+        }
+        let report = HealReport(
+            machineId: DeviceIdentity.machineId(),
+            healdVersion: HealdApp.version,
+            action: key,
+            trigger: reason,
+            consent: HealConsent(rawValue: policy.consent.rawValue) ?? .log,
+            outcome: outcome,
+            durationMs: durationMs,
+            findingFingerprint: findingFingerprint,
+            detail: detail,
+            advisor: HealAdvisor(advisor),
+            redact: PIIRedactor.redact
+        )
+        await HealReportOutbox.shared.append(report)
     }
 
     /// Consult Apple FM within this tick's budget; rules fallback once the budget/breaker is spent.
