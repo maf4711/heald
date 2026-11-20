@@ -147,3 +147,27 @@ export function clampLimit(raw: unknown, fallback = 50): number {
   if (!Number.isFinite(n)) return fallback;
   return Math.min(MAX_LIMIT, Math.max(MIN_LIMIT, Math.trunc(n)));
 }
+
+export interface HealBuckets {
+  heals: HealReport[];
+  findings: Finding[];
+}
+
+/**
+ * Merge persisted (possibly cold-start / untrusted) bucket data into the live
+ * buckets. Invalid records are dropped; caps and dedupe from applyHeals /
+ * applyFindings apply.
+ */
+export function mergeHealBuckets(target: HealBuckets, data: unknown): HealBuckets {
+  if (!isRecord(data)) return { heals: target.heals, findings: target.findings };
+  const heals = Array.isArray(data.heals)
+    ? (data.heals.filter((h) => validateHealReport(h).ok) as HealReport[])
+    : [];
+  const findings = Array.isArray(data.findings)
+    ? (data.findings.filter((f) => validateFinding(f).ok) as Finding[])
+    : [];
+  return {
+    heals: heals.length ? applyHeals(target.heals, heals) : target.heals,
+    findings: findings.length ? applyFindings(target.findings, findings) : target.findings,
+  };
+}

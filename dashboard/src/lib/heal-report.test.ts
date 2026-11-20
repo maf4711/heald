@@ -6,6 +6,7 @@ import {
   applyHeals,
   applyFindings,
   clampLimit,
+  mergeHealBuckets,
   MAX_HEALS,
   MAX_FINDINGS_PER_MACHINE,
   type HealReport,
@@ -201,4 +202,43 @@ test("applyFindings caps at MAX_FINDINGS_PER_MACHINE per machine, keeping newest
   assert.equal(out.filter((f) => f.machineId === "409C591A-node-a").length, 500);
   assert.equal(out.filter((f) => f.machineId === "node-b").length, 1);
   assert.ok(!out.some((f) => f.fingerprint === "fp0"));
+});
+
+// (g)
+test("(g) 10 heals then 2000 maccluster_status events -> heals length 10, snapshot restores them", () => {
+  // Mirrors store.ts: events live in their own 1000-cap bucket (unchanged),
+  // heals/findings in buckets that events cannot evict.
+  const MAX_EVENTS = 1000;
+  const store = {
+    events: [] as { type: string; timestamp: string }[],
+    ...mergeHealBuckets(
+      { heals: [], findings: [] },
+      {
+        heals: Array.from({ length: 10 }, (_, i) => heal({ id: `h${i}`, ts: `2026-11-21T09:0${i}:00Z` })),
+        findings: [finding()],
+      },
+    ),
+  };
+  for (let i = 0; i < 2000; i++) {
+    store.events.unshift({ type: "maccluster_status", timestamp: new Date(Date.UTC(2026, 10, 21) + i).toISOString() });
+    if (store.events.length > MAX_EVENTS) store.events.length = MAX_EVENTS;
+  }
+  assert.equal(store.events.length, 1000);
+  assert.equal(store.heals.length, 10);
+
+  const json = JSON.stringify(store);
+  const parsed = JSON.parse(json);
+  assert.ok("heals" in parsed && "findings" in parsed);
+  const cold = mergeHealBuckets({ heals: [], findings: [] }, parsed);
+  assert.equal(cold.heals.length, 10);
+  assert.equal(cold.findings.length, 1);
+});
+
+test("mergeHealBuckets ignores missing/garbage snapshot data", () => {
+  const base = mergeHealBuckets({ heals: [], findings: [] }, { heals: [heal()], findings: [] });
+  assert.equal(mergeHealBuckets(base, undefined).heals.length, 1);
+  assert.equal(mergeHealBuckets(base, {}).heals.length, 1);
+  const junk = mergeHealBuckets(base, { heals: [{ nope: 1 }, "x"], findings: "bad" } as never);
+  assert.equal(junk.heals.length, 1);
+  assert.equal(junk.findings.length, 0);
 });

@@ -7,6 +7,13 @@
 import { readFileSync, writeFileSync, renameSync, existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import {
+  applyFindings,
+  applyHeals,
+  mergeHealBuckets,
+  type Finding,
+  type HealReport,
+} from "./heal-report";
 
 export interface MachineMetrics {
   machineId: string;
@@ -101,6 +108,9 @@ type StoreSnapshot = {
   events: ActivityEntry[];
   history: Record<string, HistoryPoint[]>;
   benchmarks: Record<string, BenchmarkResult[]>;
+  // Own buckets so machine-status events can never evict heal history (GOAL 4)
+  heals: HealReport[];
+  findings: Finding[];
   savedAt: string;
 };
 
@@ -109,6 +119,8 @@ type StoreState = {
   events: ActivityEntry[];
   metricsHistory: Map<string, HistoryPoint[]>;
   benchmarkHistory: Map<string, BenchmarkResult[]>;
+  heals: HealReport[];
+  findings: Finding[];
   hydrated: boolean;
   lastPersistMs: number;
 };
@@ -129,10 +141,15 @@ function state(): StoreState {
       events: [],
       metricsHistory: new Map(),
       benchmarkHistory: new Map(),
+      heals: [],
+      findings: [],
       hydrated: false,
       lastPersistMs: 0,
     };
   }
+  // Backfill buckets on a state object created before GOAL 4 (warm isolate / dev HMR)
+  g.__healdStore.heals ??= [];
+  g.__healdStore.findings ??= [];
   return g.__healdStore;
 }
 
@@ -142,6 +159,8 @@ function snapshotFromState(s: StoreState): StoreSnapshot {
     events: s.events.slice(0, 200),
     history: Object.fromEntries(s.metricsHistory),
     benchmarks: Object.fromEntries(s.benchmarkHistory),
+    heals: s.heals,
+    findings: s.findings,
     savedAt: new Date().toISOString(),
   };
 }
@@ -167,6 +186,9 @@ function applySnapshot(s: StoreState, data: Partial<StoreSnapshot>) {
     s.events.sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
     if (s.events.length > MAX_EVENTS) s.events.length = MAX_EVENTS;
   }
+  const buckets = mergeHealBuckets({ heals: s.heals, findings: s.findings }, data);
+  s.heals = buckets.heals;
+  s.findings = buckets.findings;
   if (data.history) {
     for (const [k, v] of Object.entries(data.history)) {
       if (!s.metricsHistory.has(k) || (s.metricsHistory.get(k)?.length ?? 0) < v.length) {
@@ -320,6 +342,34 @@ export async function addEvent(entry: ActivityEntry) {
   s.events.unshift(entry);
   if (s.events.length > MAX_EVENTS) s.events.length = MAX_EVENTS;
   await persist(true);
+}
+
+/** Store validated heal reports (caller validates); dedupe by id, cap 5000. */
+export async function addHeals(heals: HealReport[]) {
+  await hydrate();
+  const s = state();
+  s.heals = applyHeals(s.heals, heals);
+  await persist(true);
+}
+
+/** Upsert validated findings by (machineId, fingerprint), cap 500 per machine. */
+export async function addFindings(findings: Finding[]) {
+  await hydrate();
+  const s = state();
+  s.findings = applyFindings(s.findings, findings);
+  await persist(true);
+}
+
+export async function getHeals(machineId?: string, limit = 50): Promise<HealReport[]> {
+  await hydrate();
+  const all = state().heals;
+  return (machineId ? all.filter((h) => h.machineId === machineId) : all).slice(0, limit);
+}
+
+export async function getFindings(machineId?: string, limit = 50): Promise<Finding[]> {
+  await hydrate();
+  const all = state().findings;
+  return (machineId ? all.filter((f) => f.machineId === machineId) : all).slice(0, limit);
 }
 
 export async function getMachines(): Promise<MachineMetrics[]> {
