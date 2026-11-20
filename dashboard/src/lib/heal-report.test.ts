@@ -14,6 +14,7 @@ import {
   type HealReport,
   type Finding,
 } from "./heal-report.ts";
+import { applySnapshot, createState, pushEvent, snapshotFromState, MAX_EVENTS } from "./store-snapshot.ts";
 
 function heal(over: Partial<HealReport> = {}): HealReport {
   return {
@@ -206,32 +207,29 @@ test("applyFindings caps at MAX_FINDINGS_PER_MACHINE per machine, keeping newest
   assert.ok(!out.some((f) => f.fingerprint === "fp0"));
 });
 
-// (g)
+// (g) — runs against store-snapshot.ts, the exact code store.ts persists with
 test("(g) 10 heals then 2000 maccluster_status events -> heals length 10, snapshot restores them", () => {
-  // Mirrors store.ts: events live in their own 1000-cap bucket (unchanged),
-  // heals/findings in buckets that events cannot evict.
-  const MAX_EVENTS = 1000;
-  const store = {
-    events: [] as { type: string; timestamp: string }[],
-    ...mergeHealBuckets(
-      { heals: [], findings: [] },
-      {
-        heals: Array.from({ length: 10 }, (_, i) => heal({ id: `h${i}`, ts: `2026-11-21T09:0${i}:00Z` })),
-        findings: [finding()],
-      },
-    ),
-  };
+  const live = createState();
+  applySnapshot(live, {
+    heals: Array.from({ length: 10 }, (_, i) => heal({ id: `h${i}`, ts: `2026-11-21T09:0${i}:00Z` })),
+    findings: [finding()],
+  });
   for (let i = 0; i < 2000; i++) {
-    store.events.unshift({ type: "maccluster_status", timestamp: new Date(Date.UTC(2026, 10, 21) + i).toISOString() });
-    if (store.events.length > MAX_EVENTS) store.events.length = MAX_EVENTS;
+    pushEvent(live, {
+      timestamp: new Date(Date.UTC(2026, 10, 21) + i).toISOString(),
+      machineId: "409C591A-node-a",
+      type: "maccluster_status",
+      summary: `status ${i}`,
+      aiGenerated: false,
+    });
   }
-  assert.equal(store.events.length, 1000);
-  assert.equal(store.heals.length, 10);
+  assert.equal(live.events.length, MAX_EVENTS);
+  assert.equal(live.heals.length, 10);
 
-  const json = JSON.stringify(store);
-  const parsed = JSON.parse(json);
-  assert.ok("heals" in parsed && "findings" in parsed);
-  const cold = mergeHealBuckets({ heals: [], findings: [] }, parsed);
+  // Cold start: a fresh state hydrated only from the persisted JSON
+  const persisted = JSON.parse(JSON.stringify(snapshotFromState(live)));
+  const cold = createState();
+  applySnapshot(cold, persisted);
   assert.equal(cold.heals.length, 10);
   assert.equal(cold.findings.length, 1);
 });
