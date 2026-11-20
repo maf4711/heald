@@ -6,6 +6,7 @@ export const HEAL_SCHEMA = "heald.heal_report/v1";
 export const FINDING_SCHEMA = "heald.findings/v1";
 export const MAX_HEALS = 5000;
 export const MAX_FINDINGS_PER_MACHINE = 500;
+export const MAX_FINDINGS_TOTAL = 20000;
 export const MAX_BATCH = 500;
 export const MAX_DETAIL_CHARS = 4000;
 export const MIN_LIMIT = 1;
@@ -236,18 +237,24 @@ export function applyHeals(bucket: readonly HealReport[], incoming: readonly Hea
 
 const findingKey = (f: Pick<Finding, "machineId" | "fingerprint">) => `${f.machineId}\u0000${f.fingerprint}`;
 
-/** Upsert findings by (machineId, fingerprint); newest lastSeen first; cap per machine. */
+/**
+ * Upsert findings by (machineId, fingerprint); newest lastSeen first; cap
+ * MAX_FINDINGS_PER_MACHINE per machine and MAX_FINDINGS_TOTAL overall.
+ */
 export function applyFindings(bucket: readonly Finding[], incoming: readonly Finding[]): Finding[] {
+  // Upsert only: fingerprints missing from a node's newer snapshot are kept, not deleted.
   const byKey = new Map<string, Finding>();
   for (const f of bucket) byKey.set(findingKey(f), f);
   for (const f of incoming) byKey.set(findingKey(f), f);
   const sorted = Array.from(byKey.values()).sort((a, b) => newestFirst(a.lastSeen, b.lastSeen));
   const perMachine = new Map<string, number>();
-  return sorted.filter((f) => {
+  const out = sorted.filter((f) => {
     const n = (perMachine.get(f.machineId) ?? 0) + 1;
     perMachine.set(f.machineId, n);
     return n <= MAX_FINDINGS_PER_MACHINE;
   });
+  if (out.length > MAX_FINDINGS_TOTAL) out.length = MAX_FINDINGS_TOTAL;
+  return out;
 }
 
 /** Parse a GET `limit` and clamp it to MIN_LIMIT..MAX_LIMIT (fallback when absent/invalid). */

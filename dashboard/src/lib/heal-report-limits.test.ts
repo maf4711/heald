@@ -1,11 +1,13 @@
-// Reviewer F1/F6: per-field caps, projection, batch caps, future timestamps.
+// Reviewer F1/F2/F6: per-field caps, projection, batch caps, future timestamps.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   validateHealReport,
   validateFinding,
+  applyFindings,
   ingestBody,
   MAX_BATCH,
+  MAX_FINDINGS_TOTAL,
   type HealReport,
   type Finding,
 } from "./heal-report.ts";
@@ -152,4 +154,24 @@ test("F1 batch cap: >500 heals / findings per request -> excess rejected and cou
     findings: { accepted: 500, rejected: 1 },
   });
   assert.ok(r.status === 200 && r.heals.length === 500 && r.findings.length === 500);
+});
+
+test("F2 applyFindings caps the whole bucket at MAX_FINDINGS_TOTAL (newest lastSeen kept)", () => {
+  assert.equal(MAX_FINDINGS_TOTAL, 20000);
+  const many: Finding[] = [];
+  for (let m = 0; m < 41; m++) {
+    for (let i = 0; i < 500; i++) {
+      many.push(
+        finding({
+          machineId: `node-${m}`,
+          fingerprint: `fp${i}`,
+          lastSeen: new Date(Date.UTC(2026, 0, 1) + (m * 500 + i) * 1000).toISOString(),
+        }) as unknown as Finding,
+      );
+    }
+  }
+  const out = applyFindings([], many);
+  assert.equal(out.length, 20000);
+  assert.equal(out.some((f) => f.machineId === "node-0"), false, "oldest machine evicted");
+  assert.equal(out[0].machineId, "node-40");
 });
