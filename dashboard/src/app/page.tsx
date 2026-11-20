@@ -2,29 +2,21 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { MachineCard } from "@/components/MachineCard";
-import { ActivityFeed } from "@/components/ActivityFeed";
+import { ActivitySection } from "@/components/ActivitySection";
+import { Pagination } from "@/components/Pagination";
 import { FleetBar } from "@/components/FleetBar";
 import { InstallPanel } from "@/components/InstallPanel";
 import { MachineTable, StatusFilter } from "@/components/MachineTable";
 import { MachineDrawer } from "@/components/MachineDrawer";
+import { HealFeed } from "@/components/HealFeed";
+import { ErrorPicture } from "@/components/ErrorPicture";
 import { t, FleetMachine, machineStatus, issueCount } from "@/lib/theme";
-
-interface Event {
-  timestamp: string;
-  machineId: string;
-  type: string;
-  summary: string;
-  aiGenerated: boolean;
-}
 
 type SortKey = "name" | "cpu" | "ram" | "sync" | "lastSeen" | "issues";
 type ViewMode = "table" | "cards";
 
-const PAGE_SIZES = [25, 50, 100, 200] as const;
-
 export default function Dashboard() {
   const [machines, setMachines] = useState<FleetMachine[]>([]);
-  const [events, setEvents] = useState<Event[]>([]);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("issues");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -37,15 +29,11 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [mRes, eRes] = await Promise.all([
-          fetch("/api/machines", { cache: "no-store" }),
-          fetch("/api/events?limit=100", { cache: "no-store" }),
-        ]);
+        const mRes = await fetch("/api/machines", { cache: "no-store" });
         if (mRes.ok) {
           setMachines((await mRes.json()).machines ?? []);
           setLoading(false);
         }
-        if (eRes.ok) setEvents((await eRes.json()).events ?? []);
       } catch {
         /* retry */
       }
@@ -350,25 +338,10 @@ export default function Dashboard() {
         </>
       )}
 
-      <section style={{ marginTop: 36 }}>
-        <h2
-          style={{
-            fontSize: 16,
-            fontWeight: 500,
-            marginBottom: 12,
-            color: t.text1,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          Activity
-          <span style={{ fontSize: 12, color: t.text3, fontWeight: 400 }}>
-            last {events.length} events
-          </span>
-        </h2>
-        <ActivityFeed events={events} />
-      </section>
+      <ErrorPicture machines={machines} />
+      <HealFeed machines={machines} />
+
+      <ActivitySection />
 
       <footer
         style={{
@@ -397,93 +370,6 @@ export default function Dashboard() {
       </footer>
 
       <MachineDrawer machine={selected} onClose={() => setSelected(null)} />
-    </div>
-  );
-}
-
-function Pagination({
-  page,
-  pageCount,
-  pageSize,
-  total,
-  onPage,
-  onPageSize,
-}: {
-  page: number;
-  pageCount: number;
-  pageSize: number;
-  total: number;
-  onPage: (p: number) => void;
-  onPageSize: (n: number) => void;
-}) {
-  if (total === 0) return null;
-  const from = page * pageSize + 1;
-  const to = Math.min(total, (page + 1) * pageSize);
-
-  const btn = (label: string, disabled: boolean, action: () => void) => (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={action}
-      style={{
-        padding: "5px 10px",
-        borderRadius: 6,
-        border: `1px solid ${t.border}`,
-        background: t.surface,
-        color: disabled ? t.text3 : t.text2,
-        cursor: disabled ? "default" : "pointer",
-        fontSize: 12,
-      }}
-    >
-      {label}
-    </button>
-  );
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        flexWrap: "wrap",
-        marginBottom: 8,
-        fontSize: 12,
-        color: t.text3,
-      }}
-    >
-      <span style={{ fontVariantNumeric: "tabular-nums" }}>
-        {from}–{to} of {total.toLocaleString()}
-      </span>
-      <div style={{ display: "flex", gap: 4 }}>
-        {btn("«", page <= 0, () => onPage(0))}
-        {btn("‹", page <= 0, () => onPage(Math.max(0, page - 1)))}
-        <span style={{ padding: "5px 8px", color: t.text2, fontVariantNumeric: "tabular-nums" }}>
-          {page + 1} / {pageCount}
-        </span>
-        {btn("›", page >= pageCount - 1, () => onPage(Math.min(pageCount - 1, page + 1)))}
-        {btn("»", page >= pageCount - 1, () => onPage(pageCount - 1))}
-      </div>
-      <label style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
-        <span>Per page</span>
-        <select
-          value={pageSize}
-          onChange={(e) => onPageSize(Number(e.target.value))}
-          style={{
-            background: t.surface,
-            color: t.text1,
-            border: `1px solid ${t.border}`,
-            borderRadius: 6,
-            padding: "4px 8px",
-            fontSize: 12,
-          }}
-        >
-          {PAGE_SIZES.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
-      </label>
     </div>
   );
 }

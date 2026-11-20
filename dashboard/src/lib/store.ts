@@ -7,180 +7,43 @@
 import { readFileSync, writeFileSync, renameSync, existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import {
+  applyFindings,
+  applyHeals,
+  machineErrorPicture,
+  type Finding,
+  type HealReport,
+  type MachineErrorPicture,
+} from "./heal-report";
+import {
+  applySnapshot,
+  createState,
+  mergeAndWrite,
+  pushEvent,
+  snapshotFromState,
+  type ActivityEntry,
+  type BenchmarkResult,
+  type HistoryPoint,
+  type MachineMetrics,
+  type StoreSnapshot,
+  type StoreState,
+} from "./store-snapshot";
 
-export interface MachineMetrics {
-  machineId: string;
-  hostname: string;
-  lastSeen: string;
-  cpu: { overall: number; perCore: number[] };
-  ram: {
-    usedGB: number;
-    wiredGB: number;
-    compressedGB: number;
-    swapUsedMB: number;
-    pressureLevel: number;
-  };
-  disk: {
-    volumes: { name: string; mountPoint: string; totalGB: number; freeGB: number }[];
-    smart: { bsdName: string; status: string }[];
-  };
-  processes: {
-    topCPU: ProcessEntry[];
-    topRAM: ProcessEntry[];
-  };
-  network?: {
-    interface: string;
-    rxBytesPerSec: number;
-    txBytesPerSec: number;
-    latencyMs: number | null;
-    packetLossPercent: number | null;
-  };
-  battery?: {
-    cycleCount: number;
-    maxCapacityPercent: number;
-    currentCharge: number;
-    isCharging: boolean;
-    condition: string;
-    temperature: number | null;
-  };
-  uptime?: {
-    systemSeconds: number;
-    daemonSeconds: number;
-    systemFormatted: string;
-  };
-  thermal?: string;
-  benchmark?: BenchmarkResult;
-  icloud?: {
-    isEnabled: boolean;
-    optimizeStorage: boolean;
-    localFiles: number;
-    cloudFiles: number;
-    syncPercent: number;
-    directories: number;
-    evictedDirs: string[];
-    conflicts: number;
-    docsSizeGB: number;
-    diskFreeGB: number;
-    birdRunning: boolean;
-  };
-  [key: string]: unknown;
-}
+export type { ActivityEntry, BenchmarkResult, MachineMetrics, ProcessEntry } from "./store-snapshot";
 
-export interface ProcessEntry {
-  pid: number;
-  name: string;
-  cpuPercent: number;
-  ramMB: number;
-  system: boolean;
-}
-
-export interface BenchmarkResult {
-  cpuSingleCore: number;
-  cpuMultiCore: number;
-  diskWriteMBs: number;
-  diskReadMBs: number;
-  memoryBandwidthGBs: number;
-  overallScore: number;
-  coreCount: number;
-  timestamp: string;
-}
-
-export interface ActivityEntry {
-  timestamp: string;
-  machineId: string;
-  type: string;
-  summary: string;
-  detail?: string;
-  aiGenerated: boolean;
-}
-
-type HistoryPoint = { timestamp: string; cpu: number; ramUsedGB: number };
-
-type StoreSnapshot = {
-  machines: Record<string, MachineMetrics>;
-  events: ActivityEntry[];
-  history: Record<string, HistoryPoint[]>;
-  benchmarks: Record<string, BenchmarkResult[]>;
-  savedAt: string;
-};
-
-type StoreState = {
-  machines: Map<string, MachineMetrics>;
-  events: ActivityEntry[];
-  metricsHistory: Map<string, HistoryPoint[]>;
-  benchmarkHistory: Map<string, BenchmarkResult[]>;
-  hydrated: boolean;
-  lastPersistMs: number;
-};
-
-const MAX_EVENTS = 1000;
 const MAX_HISTORY_PER_MACHINE = 720;
 const MAX_BENCHMARK_HISTORY = 90;
-const PERSIST_MIN_INTERVAL_MS = 2000;
 const CACHE_FILE = join(tmpdir(), "heald-store.json");
 const BLOB_PATHNAME = "heald-fleet-store.json";
 
 const g = globalThis as typeof globalThis & { __healdStore?: StoreState };
 
 function state(): StoreState {
-  if (!g.__healdStore) {
-    g.__healdStore = {
-      machines: new Map(),
-      events: [],
-      metricsHistory: new Map(),
-      benchmarkHistory: new Map(),
-      hydrated: false,
-      lastPersistMs: 0,
-    };
-  }
+  g.__healdStore ??= createState();
+  // Backfill buckets on a state object created before GOAL 4 (warm isolate / dev HMR)
+  g.__healdStore.heals ??= [];
+  g.__healdStore.findings ??= [];
   return g.__healdStore;
-}
-
-function snapshotFromState(s: StoreState): StoreSnapshot {
-  return {
-    machines: Object.fromEntries(s.machines),
-    events: s.events.slice(0, 200),
-    history: Object.fromEntries(s.metricsHistory),
-    benchmarks: Object.fromEntries(s.benchmarkHistory),
-    savedAt: new Date().toISOString(),
-  };
-}
-
-function applySnapshot(s: StoreState, data: Partial<StoreSnapshot>) {
-  if (data.machines) {
-    for (const [k, v] of Object.entries(data.machines)) {
-      const existing = s.machines.get(k);
-      if (!existing || (v.lastSeen && v.lastSeen >= (existing.lastSeen ?? ""))) {
-        s.machines.set(k, v);
-      }
-    }
-  }
-  if (data.events?.length) {
-    const seen = new Set(s.events.map((e) => `${e.timestamp}|${e.machineId}|${e.type}|${e.summary}`));
-    for (const e of data.events) {
-      const key = `${e.timestamp}|${e.machineId}|${e.type}|${e.summary}`;
-      if (!seen.has(key)) {
-        s.events.push(e);
-        seen.add(key);
-      }
-    }
-    s.events.sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
-    if (s.events.length > MAX_EVENTS) s.events.length = MAX_EVENTS;
-  }
-  if (data.history) {
-    for (const [k, v] of Object.entries(data.history)) {
-      if (!s.metricsHistory.has(k) || (s.metricsHistory.get(k)?.length ?? 0) < v.length) {
-        s.metricsHistory.set(k, v);
-      }
-    }
-  }
-  if (data.benchmarks) {
-    for (const [k, v] of Object.entries(data.benchmarks)) {
-      if (!s.benchmarkHistory.has(k) || (s.benchmarkHistory.get(k)?.length ?? 0) < v.length) {
-        s.benchmarkHistory.set(k, v);
-      }
-    }
-  }
 }
 
 function readTmpCache(): StoreSnapshot | null {
@@ -206,37 +69,50 @@ function writeTmpCache(snap: StoreSnapshot) {
   }
 }
 
+/** Remote snapshot + ETag; null when the blob does not exist. Throws on read errors. */
+async function readBlobRemote(token: string): Promise<{ snapshot: StoreSnapshot; etag: string } | null> {
+  const { get } = await import("@vercel/blob");
+  const result = await get(BLOB_PATHNAME, { access: "private", token, useCache: false });
+  if (!result) return null; // not found
+  if (result.statusCode !== 200 || !result.stream) throw new Error("blob read failed");
+  const text = await new Response(result.stream).text();
+  return { snapshot: (text ? JSON.parse(text) : {}) as StoreSnapshot, etag: result.blob.etag };
+}
+
 async function readBlobCache(): Promise<StoreSnapshot | null> {
   const token = process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) return null;
   try {
-    const { get } = await import("@vercel/blob");
-    const result = await get(BLOB_PATHNAME, {
-      access: "private",
-      token,
-      useCache: false,
-    });
-    if (!result || result.statusCode !== 200 || !result.stream) return null;
-    const text = await new Response(result.stream).text();
-    if (!text) return null;
-    return JSON.parse(text) as StoreSnapshot;
+    return (await readBlobRemote(token))?.snapshot ?? null;
   } catch {
     return null;
   }
 }
 
-async function writeBlobCache(snap: StoreSnapshot) {
+/**
+ * Read-merge-write: merge whatever another instance persisted since our
+ * hydrate, then write with ifMatch so a concurrent write is never clobbered
+ * (retried up to 3x on BlobPreconditionFailedError).
+ */
+async function writeBlobCache(s: StoreState) {
   const token = process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) return;
   try {
-    const { put } = await import("@vercel/blob");
-    // Private store (heald-fleet) + overwrite same pathname
-    await put(BLOB_PATHNAME, JSON.stringify(snap), {
-      access: "private",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      token,
-      contentType: "application/json",
+    const { put, BlobPreconditionFailedError } = await import("@vercel/blob");
+    await mergeAndWrite(s, {
+      read: () => readBlobRemote(token),
+      write: async (snap, etag) => {
+        // Private store (heald-fleet) + overwrite same pathname
+        await put(BLOB_PATHNAME, JSON.stringify(snap), {
+          access: "private",
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          token,
+          contentType: "application/json",
+          ...(etag ? { ifMatch: etag } : {}),
+        });
+      },
+      isConflict: (err) => err instanceof BlobPreconditionFailedError,
     });
   } catch {
     /* optional durability path */
@@ -262,64 +138,100 @@ async function hydrate() {
   s.hydrated = true;
 }
 
-async function persist(force = false) {
+async function persist() {
   const s = state();
-  const now = Date.now();
-  if (!force && now - s.lastPersistMs < PERSIST_MIN_INTERVAL_MS) {
-    // Still flush tmp so same-isolate reads are fresh
-    writeTmpCache(snapshotFromState(s));
-    return;
-  }
-  s.lastPersistMs = now;
-  const snap = snapshotFromState(s);
-  writeTmpCache(snap);
-  // Await blob so serverless does not freeze mid-write
-  await writeBlobCache(snap);
+  // Await blob so serverless does not freeze mid-write (merges remote state into s)
+  await writeBlobCache(s);
+  writeTmpCache(snapshotFromState(s));
 }
 
-export async function upsertMachine(data: MachineMetrics) {
+/** Write options: `persist: false` defers the write to a later flush(). */
+export type WriteOptions = { persist?: boolean };
+
+/** Persist once after a batch of `{ persist: false }` writes (one blob write per ingest). */
+export async function flush() {
+  await persist();
+}
+
+/** Hydrate, apply `change`, then persist unless the caller defers to flush(). */
+async function write(opts: WriteOptions, change: (s: StoreState) => void) {
   await hydrate();
-  const s = state();
-  const machineId = data.machineId || data.hostname || "unknown";
-  const payload: MachineMetrics = {
-    ...data,
-    machineId,
-    lastSeen: new Date().toISOString(),
-  };
-  s.machines.set(machineId, payload);
+  change(state());
+  if (opts.persist !== false) await persist();
+}
 
-  const history = s.metricsHistory.get(machineId) ?? [];
-  history.push({
-    timestamp: payload.lastSeen,
-    cpu: data.cpu?.overall ?? 0,
-    ramUsedGB: data.ram?.usedGB ?? 0,
-  });
-  if (history.length > MAX_HISTORY_PER_MACHINE) {
-    history.splice(0, history.length - MAX_HISTORY_PER_MACHINE);
-  }
-  s.metricsHistory.set(machineId, history);
+function forMachine<T extends { machineId: string }>(all: T[], machineId: string | undefined, limit: number): T[] {
+  return (machineId ? all.filter((x) => x.machineId === machineId) : all).slice(0, limit);
+}
 
-  if (data.benchmark) {
-    const benchHistory = s.benchmarkHistory.get(machineId) ?? [];
-    const lastBench = benchHistory[benchHistory.length - 1];
-    if (!lastBench || lastBench.timestamp !== data.benchmark.timestamp) {
-      benchHistory.push(data.benchmark);
-      if (benchHistory.length > MAX_BENCHMARK_HISTORY) {
-        benchHistory.splice(0, benchHistory.length - MAX_BENCHMARK_HISTORY);
-      }
-      s.benchmarkHistory.set(machineId, benchHistory);
+export async function upsertMachine(data: MachineMetrics, opts: WriteOptions = {}) {
+  await write(opts, (s) => {
+    const machineId = data.machineId || data.hostname || "unknown";
+    const payload: MachineMetrics = {
+      ...data,
+      machineId,
+      lastSeen: new Date().toISOString(),
+    };
+    s.machines.set(machineId, payload);
+
+    const history = s.metricsHistory.get(machineId) ?? [];
+    history.push({
+      timestamp: payload.lastSeen,
+      cpu: data.cpu?.overall ?? 0,
+      ramUsedGB: data.ram?.usedGB ?? 0,
+    });
+    if (history.length > MAX_HISTORY_PER_MACHINE) {
+      history.splice(0, history.length - MAX_HISTORY_PER_MACHINE);
     }
-  }
+    s.metricsHistory.set(machineId, history);
 
-  await persist(true);
+    if (data.benchmark) {
+      const benchHistory = s.benchmarkHistory.get(machineId) ?? [];
+      const lastBench = benchHistory[benchHistory.length - 1];
+      if (!lastBench || lastBench.timestamp !== data.benchmark.timestamp) {
+        benchHistory.push(data.benchmark);
+        if (benchHistory.length > MAX_BENCHMARK_HISTORY) {
+          benchHistory.splice(0, benchHistory.length - MAX_BENCHMARK_HISTORY);
+        }
+        s.benchmarkHistory.set(machineId, benchHistory);
+      }
+    }
+  });
 }
 
-export async function addEvent(entry: ActivityEntry) {
+export async function addEvent(entry: ActivityEntry, opts: WriteOptions = {}) {
+  await write(opts, (s) => pushEvent(s, entry));
+}
+
+/** Store validated heal reports (caller validates); dedupe by id, cap 5000. */
+export async function addHeals(heals: HealReport[], opts: WriteOptions = {}) {
+  await write(opts, (s) => {
+    s.heals = applyHeals(s.heals, heals);
+  });
+}
+
+/** Upsert validated findings by (machineId, fingerprint), cap 500 per machine. */
+export async function addFindings(findings: Finding[], opts: WriteOptions = {}) {
+  await write(opts, (s) => {
+    s.findings = applyFindings(s.findings, findings);
+  });
+}
+
+export async function getHeals(machineId?: string, limit = 50): Promise<HealReport[]> {
+  await hydrate();
+  return forMachine(state().heals, machineId, limit);
+}
+
+export async function getFindings(machineId?: string, limit = 50): Promise<Finding[]> {
+  await hydrate();
+  return forMachine(state().findings, machineId, limit);
+}
+
+/** Fleet "Fehlerbild" computed over the full heal + finding buckets. */
+export async function getErrorPicture(): Promise<MachineErrorPicture[]> {
   await hydrate();
   const s = state();
-  s.events.unshift(entry);
-  if (s.events.length > MAX_EVENTS) s.events.length = MAX_EVENTS;
-  await persist(true);
+  return machineErrorPicture(s.findings, s.heals);
 }
 
 export async function getMachines(): Promise<MachineMetrics[]> {
@@ -329,10 +241,7 @@ export async function getMachines(): Promise<MachineMetrics[]> {
 
 export async function getEvents(machineId?: string, limit = 50): Promise<ActivityEntry[]> {
   await hydrate();
-  const filtered = machineId
-    ? state().events.filter((e) => e.machineId === machineId)
-    : state().events;
-  return filtered.slice(0, limit);
+  return forMachine(state().events, machineId, limit);
 }
 
 export async function getHistory(machineId: string): Promise<HistoryPoint[]> {
