@@ -7,6 +7,8 @@ import { FleetBar } from "@/components/FleetBar";
 import { InstallPanel } from "@/components/InstallPanel";
 import { MachineTable, StatusFilter } from "@/components/MachineTable";
 import { MachineDrawer } from "@/components/MachineDrawer";
+import { HealFeed } from "@/components/HealFeed";
+import { ErrorPicture } from "@/components/ErrorPicture";
 import { t, FleetMachine, machineStatus, issueCount } from "@/lib/theme";
 
 interface Event {
@@ -349,6 +351,9 @@ export default function Dashboard() {
           </div>
         </>
       )}
+
+      <ErrorPicture machines={machines} />
+      <HealFeed machines={machines} />
 
       <section style={{ marginTop: 36 }}>
         <h2

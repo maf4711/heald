@@ -210,3 +210,55 @@ export function ingestBody(body: unknown): IngestResult {
     findings: findings.valid,
   };
 }
+
+export interface MachineErrorPicture {
+  machineId: string;
+  critical: number;
+  error: number;
+  warning: number;
+  info: number;
+  fixed: number;
+  lastFix: HealReport | null;
+}
+
+const FIX_OUTCOMES: readonly HealOutcome[] = ["executed_ok", "approved_executed"];
+
+/**
+ * Per-machine "Fehlerbild": open (open|recurring) findings by severity, fixed
+ * findings, and the newest successful heal. Most severe machines first.
+ */
+export function machineErrorPicture(
+  findings: readonly Finding[],
+  heals: readonly HealReport[],
+): MachineErrorPicture[] {
+  const pics = new Map<string, MachineErrorPicture>();
+  const pic = (machineId: string) => {
+    let p = pics.get(machineId);
+    if (!p) {
+      p = { machineId, critical: 0, error: 0, warning: 0, info: 0, fixed: 0, lastFix: null };
+      pics.set(machineId, p);
+    }
+    return p;
+  };
+  for (const f of findings) {
+    const p = pic(f.machineId);
+    if (f.status === "fixed") p.fixed++;
+    else if (f.severity === "critical" || f.severity === "error" || f.severity === "warning") p[f.severity]++;
+    else p.info++;
+  }
+  for (const h of heals) {
+    if (!FIX_OUTCOMES.includes(h.outcome)) {
+      pic(h.machineId);
+      continue;
+    }
+    const p = pic(h.machineId);
+    if (!p.lastFix || (h.ts ?? "") > (p.lastFix.ts ?? "")) p.lastFix = h;
+  }
+  const weight = (p: MachineErrorPicture) => [p.critical, p.error, p.warning, p.info];
+  return Array.from(pics.values()).sort((a, b) => {
+    const wa = weight(a);
+    const wb = weight(b);
+    for (let i = 0; i < wa.length; i++) if (wa[i] !== wb[i]) return wb[i] - wa[i];
+    return a.machineId.localeCompare(b.machineId);
+  });
+}

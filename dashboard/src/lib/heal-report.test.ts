@@ -8,6 +8,7 @@ import {
   clampLimit,
   mergeHealBuckets,
   ingestBody,
+  machineErrorPicture,
   MAX_HEALS,
   MAX_FINDINGS_PER_MACHINE,
   type HealReport,
@@ -284,4 +285,43 @@ test("ingestBody: metrics/events-only push still answers ok with zero counts", (
     heals: { accepted: 0, rejected: 0 },
     findings: { accepted: 0, rejected: 0 },
   });
+});
+
+// (i)
+test("(i) machineErrorPicture counts open critical/error/warning and fixed per machine", () => {
+  const findings = [
+    finding({ machineId: "node-a", fingerprint: "panic:1", severity: "critical", status: "open" }),
+    finding({ machineId: "node-a", fingerprint: "crash:2", severity: "error", status: "recurring" }),
+    finding({ machineId: "node-a", fingerprint: "fault:3", severity: "warning", status: "open" }),
+    finding({ machineId: "node-a", fingerprint: "fault:4", severity: "warning", status: "open" }),
+    finding({ machineId: "node-a", fingerprint: "crash:5", severity: "error", status: "fixed" }),
+    finding({ machineId: "node-a", fingerprint: "crash:6", severity: "critical", status: "fixed" }),
+    finding({ machineId: "node-b", fingerprint: "crash:7", severity: "error", status: "fixed" }),
+  ];
+  const heals = [
+    heal({ id: "1", machineId: "node-a", ts: "2026-11-21T08:00:00Z", outcome: "executed_ok" }),
+    heal({ id: "2", machineId: "node-a", ts: "2026-11-21T09:00:00Z", outcome: "executed_failed" }),
+    heal({ id: "3", machineId: "node-a", ts: "2026-11-21T07:00:00Z", outcome: "approved_executed" }),
+  ];
+  const pics = machineErrorPicture(findings, heals);
+  const a = pics.find((p) => p.machineId === "node-a");
+  const b = pics.find((p) => p.machineId === "node-b");
+  assert.ok(a && b);
+  assert.deepEqual(
+    { critical: a.critical, error: a.error, warning: a.warning, fixed: a.fixed },
+    { critical: 1, error: 1, warning: 2, fixed: 2 },
+  );
+  assert.equal(a.lastFix?.id, "1");
+  assert.deepEqual(
+    { critical: b.critical, error: b.error, warning: b.warning, fixed: b.fixed },
+    { critical: 0, error: 0, warning: 0, fixed: 1 },
+  );
+  assert.equal(b.lastFix, null);
+  assert.equal(pics[0].machineId, "node-a", "most severe machine first");
+});
+
+test("machineErrorPicture lists machines that only have heals", () => {
+  const pics = machineErrorPicture([], [heal({ machineId: "node-c" })]);
+  assert.equal(pics.length, 1);
+  assert.equal(pics[0].lastFix?.machineId, "node-c");
 });
