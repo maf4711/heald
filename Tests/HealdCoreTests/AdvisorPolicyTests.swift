@@ -58,4 +58,24 @@ struct AdvisorPolicyTests {
             #expect(out.action == action)
         }
     }
+
+    // MARK: fix 3 — no FM consult for memory actions under critical pressure
+
+    @Test func memoryCriticalOnlyAtKernelLevelFour() {
+        #expect(AutohealAdvisor.isMemoryCritical(pressureLevel: 1) == false)
+        #expect(AutohealAdvisor.isMemoryCritical(pressureLevel: 2) == false)
+        #expect(AutohealAdvisor.isMemoryCritical(pressureLevel: 4) == true)
+    }
+
+    @Test(arguments: [HealAction.ramPurge, .perfAutoheal])
+    func memoryActionsIneligibleWhenCritical(_ action: HealAction) {
+        #expect(AutohealAdvisor.isEligible(action: action, memoryCritical: true) == false)
+        #expect(AutohealAdvisor.isEligible(action: action, memoryCritical: false) == true)
+    }
+
+    @Test func otherActionsStayEligibleWhenMemoryCritical() {
+        for action in HealAction.allCases where action != .ramPurge && action != .perfAutoheal {
+            #expect(AutohealAdvisor.isEligible(action: action, memoryCritical: true) == true)
+        }
+    }
 }

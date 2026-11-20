@@ -87,6 +87,19 @@ public enum AutohealAdvisor: Sendable {
     /// Security controls: the advisor is consulted and logged but can never downgrade them.
     public static let vetoProofActions: Set<HealAction> = [.firewallOn, .filevaultWarn]
 
+    /// Actions that free memory: under critical pressure an on-device model load would make it worse.
+    public static let memoryReliefActions: Set<HealAction> = [.ramPurge, .perfAutoheal]
+
+    /// Kernel memory-pressure level 4 (1 normal, 2 warning, 4 critical).
+    public static func isMemoryCritical(pressureLevel: Int) -> Bool {
+        pressureLevel >= 4
+    }
+
+    /// Whether Apple FM may be consulted for `action` right now.
+    public static func isEligible(action: HealAction, memoryCritical: Bool) -> Bool {
+        !(memoryCritical && memoryReliefActions.contains(action))
+    }
+
     /// Combine the rule decision with the advisor verdict.
     public static func gate(ruleAction: HealAction, verdict: AdvisorVerdict) -> AdvisorVerdict {
         guard verdict.action == ruleAction else {
