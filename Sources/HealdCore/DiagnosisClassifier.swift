@@ -10,8 +10,10 @@ extension DiagnosisEngine {
         let isPanicBug = firstMatch(#""bug_type"\s*:\s*"210""#, in: contents) != nil
         let isPanicFile = filename.lowercased().hasSuffix(".panic") || filename.lowercased().hasPrefix("panic")
         if isPanicBug || isPanicFile {
-            let reason = firstMatch(#"panic\(cpu[^)]*\)\s*:?\s*([^"\n\\]+)"#, in: contents).map(normalizePanic)
-            guard let signature = reason ?? (isPanicBug ? "unknown" : nil), !signature.isEmpty else { return nil }
+            // Message may be quoted, JSON-escaped (\"…\") or bare; a panic file is never unparsed.
+            let reason = firstMatch(#"panic\(cpu[^)]*\)\s*:?\s*(?:\\?")?([^"\n\\]+)"#, in: contents)
+                .map(normalizePanic) ?? ""
+            let signature = reason.isEmpty ? "unknown" : reason
             return Observation(
                 category: .panic, component: "kernel", signature: signature,
                 source: .panicReport, at: at, sample: sample
@@ -29,8 +31,7 @@ extension DiagnosisEngine {
             )
         }
         if let event = firstMatch(#"(?m)^Event:\s*(.+?)\s*$"#, in: contents) {
-            let signature = event.lowercased()
-                .replacingOccurrences(of: #"[^a-z0-9]+"#, with: "_", options: .regularExpression)
+            let signature = RegexCache.replace(#"[^a-z0-9]+"#, in: event.lowercased(), with: "_")
                 .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
             guard !signature.isEmpty else { return nil }
             return Observation(
@@ -57,24 +58,6 @@ extension DiagnosisEngine {
         )
     }
 
-    /// `launchctl print gui/<uid>` services block → failing jobs (label → last exit status).
-    /// Rule ported from daemon-ops-mcp `daemon_health`: last exit != 0; SIGTERM on unload (-15) is not a failure.
-    public static func launchdFailures(from output: String) -> [String: Int] {
-        var out: [String: Int] = [:]
-        var inServices = false
-        for raw in output.split(separator: "\n", omittingEmptySubsequences: true) {
-            let line = raw.trimmingCharacters(in: .whitespaces)
-            if line == "services = {" { inServices = true; continue }
-            guard inServices else { continue }
-            if line == "}" { inServices = false; continue }
-            let cols = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
-            guard cols.count == 3, cols[0] == "-" || Int(cols[0]) != nil,
-                  let code = Int(cols[1]), code != 0, code != -15 else { continue }
-            out[String(cols[2])] = code
-        }
-        return out
-    }
-
     /// `Finder-2026-11-20-101500.ips` / `bird_2026-11-20-111520_host.diag` → process name.
     public static func processName(fromReportFilename name: String) -> String {
         let base = (name as NSString).deletingPathExtension
@@ -92,20 +75,13 @@ extension DiagnosisEngine {
 
     /// Strip addresses/numbers so the same panic on another boot keeps its fingerprint.
     private static func normalizePanic(_ s: String) -> String {
-        let t = s
-            .replacingOccurrences(of: #"0x[0-9a-fA-F]+"#, with: "0x", options: .regularExpression)
-            .replacingOccurrences(of: #"\d+"#, with: "#", options: .regularExpression)
-            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespaces)
+        var t = RegexCache.replace(#"0x[0-9a-fA-F]+"#, in: s, with: "0x")
+        t = RegexCache.replace(#"\d+"#, in: t, with: "#")
+        t = RegexCache.replace(#"\s+"#, in: t, with: " ").trimmingCharacters(in: .whitespaces)
         return cap(redactPaths(t), 80)
     }
 
-    /// First capture group (or whole match when the pattern has no group).
     static func firstMatch(_ pattern: String, in s: String) -> String? {
-        guard let re = try? NSRegularExpression(pattern: pattern),
-              let m = re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) else { return nil }
-        let r = m.numberOfRanges > 1 ? m.range(at: 1) : m.range
-        guard let range = Range(r, in: s) else { return nil }
-        return String(s[range])
+        RegexCache.firstMatch(pattern, in: s)
     }
 }

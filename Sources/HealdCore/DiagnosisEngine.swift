@@ -15,12 +15,20 @@ public struct DiagnosisEngine: Sendable {
     ]
     /// mDNSResponder faults per scan that trigger `dns_flush`.
     public static let dnsFaultThreshold = 3
+    /// `dns_flush` links only to the mDNSResponder fault finding, never to a crash finding.
+    public static let dnsFlushFingerprint = "fault:mDNSResponder"
+    /// A unified-log fault joins a crash finding only within this distance of its lastSeen.
+    public static let faultMergeWindow: TimeInterval = 10 * 60
+    /// Open findings quiet for longer are hidden from `heald findings` unless --all.
+    public static let staleAfter: TimeInterval = 7 * 24 * 3600
 
     public var machineId: String {
         didSet { for k in byFingerprint.keys { byFingerprint[k]?.machineId = machineId } }
     }
     /// Inputs that could not be classified (empty / binary / malformed). Never fatal.
     public private(set) var unparsed: Int
+    /// Bumped on every state change; persistence writes only when it moved (dirty tracking).
+    public private(set) var revision = 0
     private var byFingerprint: [String: Finding]
 
     public init(machineId: String, findings: [Finding] = [], unparsed: Int = 0) {
@@ -48,7 +56,20 @@ public struct DiagnosisEngine: Sendable {
 
     public func finding(_ fingerprint: String) -> Finding? { byFingerprint[fingerprint] }
 
-    public mutating func noteUnparsed(_ n: Int = 1) { unparsed += n }
+    /// CLI view: active findings, hiding open ones quiet for `staleAfter` unless `includeAll`.
+    public func visibleFindings(now: Date, includeAll: Bool) -> (findings: [Finding], staleHidden: Int) {
+        if includeAll {
+            return (activeFindings + findings.filter { $0.status == .fixed }, 0)
+        }
+        let active = activeFindings
+        let shown = active.filter { now.timeIntervalSince($0.lastSeen) <= Self.staleAfter }
+        return (shown, active.count - shown.count)
+    }
+
+    public mutating func noteUnparsed(_ n: Int = 1) {
+        unparsed += n
+        revision += 1
+    }
 
     // MARK: - Severity + fingerprint
 
@@ -76,20 +97,34 @@ public struct DiagnosisEngine: Sendable {
 
     /// `/Users/<name>/…` → `/Users/~/…` so fingerprints and samples carry no user names.
     public static func redactPaths(_ s: String) -> String {
-        s.replacingOccurrences(of: #"/Users/[^/\s"]+"#, with: "/Users/~", options: .regularExpression)
+        RegexCache.replace(#"/Users/[^/\s"]+"#, in: s, with: "/Users/~")
     }
 
+    /// Cap to `n` UTF-16 units (JS `String.length`, as the dashboard validator counts),
+    /// trimming to the last whole Character so emoji / combining marks are never split.
     static func cap(_ s: String, _ n: Int) -> String {
-        s.count <= n ? s : String(s.prefix(n))
+        guard s.utf16.count > n else { return s }
+        var out = ""
+        var used = 0
+        for ch in s {
+            let units = ch.utf16.count
+            if used + units > n { break }
+            out.append(ch)
+            used += units
+        }
+        return out
     }
 
-    /// Fingerprint an observation will merge into: a unified-log fault joins the most recent
-    /// crash finding of the same component, so one component failure is one finding.
+    /// Fingerprint an observation will merge into: a unified-log fault joins a crash finding of the
+    /// same component that is not fixed and was seen within `faultMergeWindow`; else `fault:<proc>`.
     public func resolveFingerprint(for o: Observation) -> String {
         if o.category == .fault, o.source == .unifiedLog {
             let component = Self.cap(Self.redactPaths(o.component), Finding.maxShort)
             if let crash = byFingerprint.values
-                .filter({ $0.category == .crash && $0.component == component })
+                .filter({
+                    $0.category == .crash && $0.component == component && $0.status != .fixed
+                        && abs(o.at.timeIntervalSince($0.lastSeen)) <= Self.faultMergeWindow
+                })
                 .max(by: { $0.lastSeen < $1.lastSeen }) {
                 return crash.fingerprint
             }
@@ -102,7 +137,8 @@ public struct DiagnosisEngine: Sendable {
     @discardableResult
     public mutating func ingest(_ o: Observation) -> String {
         let fp = resolveFingerprint(for: o)
-        let sample = Self.cap(Self.redactPaths(o.sample), Finding.maxSample)
+        let sample = Self.cap(SecretRedactor.redact(Self.redactPaths(o.sample)), Finding.maxSample)
+        revision += 1
         let source = Self.cap(o.source.rawValue, Finding.maxSourceChars)
         let severity = Self.severity(category: o.category, component: o.component)
 
@@ -148,6 +184,7 @@ public struct DiagnosisEngine: Sendable {
         f.linkedAction = Self.cap(action, Finding.maxShort)
         f.healedAt = succeeded ? at : nil
         byFingerprint[fingerprint] = f
+        revision += 1
     }
 
     /// open/recurring → fixed when the linked heal succeeded and nothing new arrived for `quietWindow`.
@@ -156,19 +193,22 @@ public struct DiagnosisEngine: Sendable {
             guard let healed = f.healedAt, f.lastSeen <= healed,
                   now.timeIntervalSince(healed) >= Self.quietWindow else { continue }
             byFingerprint[fp]?.status = .fixed
+            revision += 1
         }
         evict()
     }
 
-    /// Keep at most `maxFindings`: evict the oldest fixed findings first; open/recurring never.
+    /// Hard device cap `maxFindings`: evict fixed findings first (oldest lastSeen), then the
+    /// oldest open/recurring ones — the dashboard keeps at most 500 per machine.
     private mutating func evict() {
         let excess = byFingerprint.count - Self.maxFindings
         guard excess > 0 else { return }
-        let victims = byFingerprint.values
-            .filter { $0.status == .fixed }
-            .sorted { $0.lastSeen < $1.lastSeen }
-            .prefix(excess)
+        let byAge: (Finding, Finding) -> Bool = { $0.lastSeen < $1.lastSeen }
+        let all = Array(byFingerprint.values)
+        let victims = (all.filter { $0.status == .fixed }.sorted(by: byAge)
+            + all.filter { $0.status != .fixed }.sorted(by: byAge)).prefix(excess)
         for v in victims { byFingerprint[v.fingerprint] = nil }
+        revision += 1
     }
 
     // MARK: - Source adapters (classify + ingest, count unparsed)
@@ -206,22 +246,6 @@ public struct DiagnosisEngine: Sendable {
         return counts
     }
 
-    /// Ingest launchd job failures that are new or changed exit status since `previous`.
-    public mutating func ingestLaunchd(output: String, previous: inout [String: Int], at: Date) {
-        let current = Self.launchdFailures(from: output)
-        for (label, code) in current.sorted(by: { $0.key < $1.key }) where previous[label] != code {
-            ingest(Observation(
-                category: .launchdJob,
-                component: label,
-                signature: "",
-                source: .launchd,
-                at: at,
-                sample: "launchd job \(label) last exit status \(code)"
-            ))
-        }
-        previous = current
-    }
-
     /// Lines not seen in the previous scan (the 90 s `log show` window overlaps the 60 s cadence).
     public static func freshLines(_ lines: [String], seen: inout Set<String>) -> [String] {
         let fresh = lines.filter { !seen.contains($0) }
@@ -231,8 +255,10 @@ public struct DiagnosisEngine: Sendable {
 
     // MARK: - Remediation planning (execution only via SelfHealOrchestrator.fire consent gate)
 
-    public static func remediation(for o: Observation, isRunning: Bool) -> HealAction? {
-        o.category == .crash && restartableApps.contains(o.component) && !isRunning ? .appRestart : nil
+    /// Every crash of a restartable app requests `app_restart`; the executor (inside `fire`)
+    /// checks whether the app is already back.
+    public static func remediation(for o: Observation) -> HealAction? {
+        o.category == .crash && restartableApps.contains(o.component) ? .appRestart : nil
     }
 
     public static func dnsFlushNeeded(faultCounts: [String: Int]) -> Bool {

@@ -14,7 +14,8 @@ actor SystemErrorScanner {
     private var stateLoaded = false
     private let stateURL: URL
     private var lastFaultLines: Set<String> = []
-    private var lastLaunchdFailures: [String: Int] = [:]
+    /// nil until seeded from open launchd findings (so a daemon restart does not re-count them).
+    private var lastLaunchdFailures: [String: Int]?
 
     private static let reportExtensions: Set<String> = ["ips", "crash", "diag", "panic"]
     private static let maxReportBytes = 256 * 1024
@@ -76,6 +77,7 @@ actor SystemErrorScanner {
         let wasPrimed = reports.primed
         let mtimes = Dictionary(found.map { ($0.path, $0.mtime) }, uniquingKeysWith: max)
         let fresh = reports.fresh(found.sorted { $0.mtime < $1.mtime }.map(\.path), limit: 20)
+        reports.retain(current: Set(found.map(\.path))) // age-based trim: drop paths past the 24 h cutoff
         if !wasPrimed {
             Logger.health.info("SystemErrorScanner primed with \(self.reports.seen.count) existing reports")
             return
@@ -100,18 +102,11 @@ actor SystemErrorScanner {
                 $0.ingestReport(filename: filename, contents: contents, at: at)
             }) else { continue }
 
-            if DiagnosisEngine.remediation(for: hit.observation, isRunning: isRunning(app)) == .appRestart {
+            // Every crash of a restartable app → request; the executor inside fire checks isRunning.
+            if DiagnosisEngine.remediation(for: hit.observation) == .appRestart {
                 await FindingsStore.shared.request(.appRestart, target: app, fingerprint: hit.fingerprint)
-            } else if DiagnosisEngine.restartableApps.contains(app) {
-                try? await activityLog.log(event: ActivityEvent(
-                    type: .selfHealed,
-                    summary: "Crash noted for \(app) (already running again)",
-                    detail: path
-                ))
             }
         }
-
-        reports.trim()
     }
 
     private func readReport(_ path: String) -> String {
@@ -181,38 +176,31 @@ actor SystemErrorScanner {
         }
 
         if DiagnosisEngine.dnsFlushNeeded(faultCounts: byProcess) {
-            let fp = await FindingsStore.shared.mutate { e in
-                e.resolveFingerprint(for: Observation(
-                    category: .fault, component: "mDNSResponder", signature: "",
-                    source: .unifiedLog, at: now, sample: ""
-                ))
-            }
-            await FindingsStore.shared.request(.dnsFlush, target: "mDNSResponder", fingerprint: fp)
+            // Linked to the mDNSResponder fault finding only — never to a crash finding.
+            await FindingsStore.shared.request(
+                .dnsFlush, target: "mDNSResponder", fingerprint: DiagnosisEngine.dnsFlushFingerprint
+            )
         }
     }
 
     // MARK: - launchd jobs
 
     private func scanLaunchdJobs() async {
-        let result = ShellRunner.run(
-            "/bin/launchctl", arguments: ["print", "gui/\(getuid())"], timeoutSeconds: 5
-        )
+        // `launchctl list` (gui domain of this user, PID/Status/Label) — small, stable output.
+        let result = ShellRunner.run("/bin/launchctl", arguments: ["list"], timeoutSeconds: 5)
         guard result.succeeded else { return }
-        let prev = lastLaunchdFailures
+        let seeded = lastLaunchdFailures
         let now = Date()
         let output = result.output
+        let user = NSUserName()
         lastLaunchdFailures = await FindingsStore.shared.mutate { e in
-            var previous = prev
-            e.ingestLaunchd(output: output, previous: &previous, at: now)
+            var previous = seeded ?? e.launchdBaseline()
+            e.ingestLaunchd(output: output, previous: &previous, at: now, userName: user)
             return previous
         }
     }
 
     // MARK: - Helpers
-
-    private func isRunning(_ name: String) -> Bool {
-        ShellRunner.run("/usr/bin/pgrep", arguments: ["-x", name], timeoutSeconds: 3).succeeded
-    }
 
     private func ensureStateLoaded() {
         guard !stateLoaded else { return }

@@ -21,8 +21,9 @@ public enum FindingsFile {
             findings: engine.findings
         )
         let data = try DiagnosisEngine.encoder(pretty: true).encode(doc)
-        let tmp = url.deletingLastPathComponent()
-            .appendingPathComponent("\(url.lastPathComponent).tmp-\(UUID().uuidString)")
+        let dir = url.deletingLastPathComponent()
+        removeOrphanTempFiles(of: url)
+        let tmp = dir.appendingPathComponent("\(url.lastPathComponent).tmp-\(UUID().uuidString)")
         try data.write(to: tmp)
         guard rename(tmp.path, url.path) == 0 else {
             let err = errno
@@ -32,32 +33,61 @@ public enum FindingsFile {
     }
 
     /// Missing or corrupt file → empty engine (never throws, never crashes the scan).
-    public static func load(from url: URL, machineId: String) -> DiagnosisEngine {
-        guard let data = try? Data(contentsOf: url),
-              let doc = try? DiagnosisEngine.decoder().decode(Document.self, from: data),
+    /// A corrupt file is moved aside to `findings.json.corrupt-<epoch>` for inspection.
+    public static func load(
+        from url: URL,
+        machineId: String,
+        now: Date = Date(),
+        quarantineCorrupt: Bool = true
+    ) -> DiagnosisEngine {
+        guard let data = try? Data(contentsOf: url) else { return DiagnosisEngine(machineId: machineId) }
+        guard let doc = try? DiagnosisEngine.decoder().decode(Document.self, from: data),
               doc.schema == Finding.schema else {
+            let aside = url.deletingLastPathComponent()
+                .appendingPathComponent("\(url.lastPathComponent).corrupt-\(Int(now.timeIntervalSince1970))")
+            if quarantineCorrupt { try? FileManager.default.moveItem(at: url, to: aside) }
             return DiagnosisEngine(machineId: machineId)
         }
         return DiagnosisEngine(machineId: machineId, findings: doc.findings, unparsed: doc.unparsed)
     }
+
+    /// Temp files left by a write that crashed before rename.
+    private static func removeOrphanTempFiles(of url: URL) {
+        let dir = url.deletingLastPathComponent()
+        let prefix = "\(url.lastPathComponent).tmp-"
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        for name in names where name.hasPrefix(prefix) {
+            try? FileManager.default.removeItem(at: dir.appendingPathComponent(name))
+        }
+    }
 }
 
 extension DiagnosisEngine {
+    // ISO8601DateFormatter is thread-safe; shared to avoid per-date allocation.
+    nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    nonisolated(unsafe) private static let isoPlain = ISO8601DateFormatter()
+
+    /// Dates as ISO 8601 with milliseconds (`2026-11-20T10:15:00.250Z`, 24 chars ≤ dashboard's 40).
     public static func encoder(pretty: Bool = false) -> JSONEncoder {
         let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
+        e.dateEncodingStrategy = .custom { date, enc in
+            var c = enc.singleValueContainer()
+            try c.encode(isoFractional.string(from: date))
+        }
         e.outputFormatting = pretty ? [.prettyPrinted, .sortedKeys] : [.sortedKeys]
         return e
     }
 
+    /// Accepts ISO 8601 with or without fractional seconds.
     public static func decoder() -> JSONDecoder {
         let d = JSONDecoder()
         d.dateDecodingStrategy = .custom { dec in
             let s = try dec.singleValueContainer().decode(String.self)
-            let plain = ISO8601DateFormatter()
-            let frac = ISO8601DateFormatter()
-            frac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            guard let date = plain.date(from: s) ?? frac.date(from: s) else {
+            guard let date = isoFractional.date(from: s) ?? isoPlain.date(from: s) else {
                 throw DecodingError.dataCorrupted(.init(codingPath: dec.codingPath, debugDescription: "bad date \(s)"))
             }
             return date
@@ -89,8 +119,9 @@ public struct ReportSeenState: Sendable {
         return out
     }
 
-    /// Bound the persisted set (same limits as the original scanner state).
-    public mutating func trim(keep: Int = 1000, above: Int = 2000) {
-        if seen.count > above { seen = Set(seen.prefix(keep)) }
+    /// Age-based trim: keep only paths still inside the scan window (mtime ≥ 24 h cutoff);
+    /// anything older can never be reported again, so it no longer needs to be remembered.
+    public mutating func retain(current: Set<String>) {
+        seen.formIntersection(current)
     }
 }

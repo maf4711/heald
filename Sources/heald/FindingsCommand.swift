@@ -11,7 +11,7 @@ struct FindingsCommand: AsyncParsableCommand {
         abstract: "List open device findings (crashes, panics, faults, launchd jobs)"
     )
 
-    @Flag(name: .long, help: "Include fixed findings")
+    @Flag(name: .long, help: "Include fixed findings and open ones quiet for more than 7 days")
     var all: Bool = false
 
     @Flag(name: .long, help: "Print findings as heald.findings/v1 JSON")
@@ -19,8 +19,12 @@ struct FindingsCommand: AsyncParsableCommand {
 
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
-        let engine = FindingsFile.load(from: FindingsStore.fileURL, machineId: DeviceIdentity.machineId())
-        let list = all ? engine.findings : engine.activeFindings
+        // Read-only: never moves or rewrites the daemon's file.
+        let engine = FindingsFile.load(
+            from: FindingsStore.fileURL, machineId: DeviceIdentity.machineId(), quarantineCorrupt: false
+        )
+        let (list, staleHidden) = engine.visibleFindings(now: Date(), includeAll: all)
+        let staleNote = staleHidden > 0 ? ", \(staleHidden) stale hidden (quiet > 7 days, use --all)" : ""
 
         if json {
             let data = try DiagnosisEngine.encoder(pretty: true).encode(list)
@@ -28,10 +32,11 @@ struct FindingsCommand: AsyncParsableCommand {
             return
         }
         guard !list.isEmpty else {
-            print("No \(all ? "" : "open ")findings (unparsed inputs: \(engine.unparsed))")
+            print("No \(all ? "" : "open ")findings (unparsed inputs: \(engine.unparsed))\(staleNote)")
             return
         }
         let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime]
         print("SEVERITY  STATUS     COUNT  LAST SEEN             LINKED        FINGERPRINT")
         for f in list {
             print([
@@ -43,6 +48,6 @@ struct FindingsCommand: AsyncParsableCommand {
                 f.fingerprint,
             ].joined(separator: "  "))
         }
-        print("\(list.count) finding(s), unparsed inputs: \(engine.unparsed) — \(FindingsStore.fileURL.path)")
+        print("\(list.count) finding(s)\(staleNote), unparsed inputs: \(engine.unparsed) — \(FindingsStore.fileURL.path)")
     }
 }

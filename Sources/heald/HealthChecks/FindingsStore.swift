@@ -22,6 +22,8 @@ actor FindingsStore {
 
     private var engine: DiagnosisEngine?
     private var pending: [String: RemediationRequest] = [:]
+    /// Engine revision last written; persist only when it moved (dirty tracking).
+    private var savedRevision: Int?
 
     private func loaded() -> DiagnosisEngine {
         if let engine { return engine }
@@ -52,6 +54,11 @@ actor FindingsStore {
         pending[key]?.fingerprints.insert(fingerprint)
     }
 
+    /// Targets queued for `action`, without removing them (used for the fire reason).
+    func peek(_ action: HealdCore.HealAction) -> [String] {
+        pending.values.filter { $0.action == action }.map(\.target).sorted()
+    }
+
     func drain(_ action: HealdCore.HealAction) -> [RemediationRequest] {
         let out = pending.values.filter { $0.action == action }.sorted { $0.target < $1.target }
         for r in out { pending["\(r.action.rawValue):\(r.target)"] = nil }
@@ -73,8 +80,11 @@ actor FindingsStore {
     func persist() {
         let now = Date()
         mutate { $0.refresh(now: now) }
+        let current = loaded()
+        guard current.revision != savedRevision else { return }
         do {
-            try FindingsFile.save(loaded(), to: Self.fileURL, now: now)
+            try FindingsFile.save(current, to: Self.fileURL, now: now)
+            savedRevision = current.revision
         } catch {
             Logger.health.error("findings.json write failed: \(error.localizedDescription)")
         }

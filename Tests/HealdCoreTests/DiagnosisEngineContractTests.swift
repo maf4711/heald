@@ -11,7 +11,7 @@ private func validateFinding(_ any: Any) -> String? {
         if raw is NSNull { return required ? "missing \(k)" : (nullable ? nil : "invalid \(k)") }
         guard let s = raw as? String else { return "invalid \(k)" }
         if required, s.trimmingCharacters(in: .whitespaces).isEmpty { return "missing \(k)" }
-        return s.count > max ? "\(k) too long" : nil
+        return s.utf16.count > max ? "\(k) too long" : nil
     }
     func oneOf(_ k: String, _ allowed: [String], required: Bool = false) -> String? {
         guard let raw = v[k], !(raw is NSNull) else { return required ? "missing \(k)" : nil }
@@ -24,7 +24,11 @@ private func validateFinding(_ any: Any) -> String? {
     }
     func iso(_ k: String, required: Bool = false) -> String? {
         guard let raw = v[k], !(raw is NSNull) else { return required ? "missing \(k)" : nil }
-        guard let s = raw as? String, s.count <= 40, ISO8601DateFormatter().date(from: s) != nil else {
+        let frac = ISO8601DateFormatter()
+        frac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        // JS Date.parse accepts both forms
+        guard let s = raw as? String, s.utf16.count <= 40,
+              ISO8601DateFormatter().date(from: s) ?? frac.date(from: s) != nil else {
             return "invalid \(k)"
         }
         return nil
@@ -32,7 +36,7 @@ private func validateFinding(_ any: Any) -> String? {
     func sources() -> String? {
         guard let raw = v["sources"] else { return nil }
         guard let arr = raw as? [Any], arr.count <= 20 else { return "invalid sources" }
-        return arr.allSatisfy { ($0 as? String).map { $0.count <= 256 } ?? false } ? nil : "invalid sources"
+        return arr.allSatisfy { ($0 as? String).map { $0.utf16.count <= 256 } ?? false } ? nil : "invalid sources"
     }
     let checks: [String?] = [
         str("fingerprint", 128, required: true),
@@ -51,8 +55,8 @@ private func validateFinding(_ any: Any) -> String? {
 private let fixture = """
 {"schema":"heald.findings/v1","machineId":"node-a","fingerprint":"crash:Finder:EXC_BAD_ACCESS",\
 "category":"crash","component":"Finder","severity":"warning","count":12,"status":"fixed",\
-"recurrenceCount":0,"linkedAction":"app_restart","firstSeen":"2026-11-20T10:15:00Z",\
-"lastSeen":"2026-11-20T12:05:00Z","sources":["crash_report"],"sample":"Finder crashed: EXC_BAD_ACCESS"}
+"recurrenceCount":0,"linkedAction":"app_restart","firstSeen":"2026-11-20T10:15:00.000Z",\
+"lastSeen":"2026-11-20T12:05:00.250Z","sources":["crash_report"],"sample":"Finder crashed: EXC_BAD_ACCESS"}
 """
 
 private func tmpDir() -> URL {
@@ -122,8 +126,9 @@ extension DiagnosisEngineTests {
         // A second save replaces the file atomically and leaves no temp file of its own.
         engine.noteUnparsed()
         try FindingsFile.save(engine, to: url)
+        // ...and cleans the orphan temp file the crashed write left behind.
         let leftovers = try FileManager.default.contentsOfDirectory(atPath: dir.path)
-            .filter { $0.hasPrefix("findings.json.tmp-") && $0 != "findings.json.tmp-crashed" }
+            .filter { $0.hasPrefix("findings.json.tmp-") }
         #expect(leftovers.isEmpty)
         #expect(FindingsFile.load(from: url, machineId: "node-a").unparsed == 2)
     }
@@ -134,6 +139,17 @@ extension DiagnosisEngineTests {
         let engine = FindingsFile.load(from: url, machineId: "node-a")
         #expect(engine.findings.isEmpty)
         #expect(engine.machineId == "node-a")
+        // The corrupt file is kept aside for inspection, not silently overwritten.
+        let names = try FileManager.default.contentsOfDirectory(atPath: url.deletingLastPathComponent().path)
+        #expect(names.contains { $0.hasPrefix("findings.json.corrupt-") })
+        #expect(!names.contains("findings.json"))
+    }
+
+    @Test func readOnlyLoadLeavesCorruptFileInPlace() throws {
+        let url = tmpDir().appendingPathComponent("findings.json")
+        try Data("{not json".utf8).write(to: url)
+        #expect(FindingsFile.load(from: url, machineId: "m", quarantineCorrupt: false).findings.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: url.path))
     }
 
     // MARK: criterion 3 — remediation planning (execution goes through SelfHealOrchestrator.fire)
@@ -145,9 +161,9 @@ extension DiagnosisEngineTests {
                                  source: .crashReport, at: Date(), sample: "")
         let xcode = Observation(category: .crash, component: "Xcode", signature: "EXC_CRASH",
                                 source: .crashReport, at: Date(), sample: "")
-        #expect(DiagnosisEngine.remediation(for: finder, isRunning: false) == .appRestart)
-        #expect(DiagnosisEngine.remediation(for: finder, isRunning: true) == nil)
-        #expect(DiagnosisEngine.remediation(for: xcode, isRunning: false) == nil)
+        // Every crash of a restartable app requests a restart (the executor checks isRunning).
+        #expect(DiagnosisEngine.remediation(for: finder) == .appRestart)
+        #expect(DiagnosisEngine.remediation(for: xcode) == nil)
         #expect(DiagnosisEngine.dnsFlushNeeded(faultCounts: ["mDNSResponder": 3]))
         #expect(!DiagnosisEngine.dnsFlushNeeded(faultCounts: ["mDNSResponder": 2, "cloudd": 9]))
     }
