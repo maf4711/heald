@@ -7,7 +7,14 @@
 import { readFileSync, writeFileSync, renameSync, existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { applyFindings, applyHeals, type Finding, type HealReport } from "./heal-report";
+import {
+  applyFindings,
+  applyHeals,
+  machineErrorPicture,
+  type Finding,
+  type HealReport,
+  type MachineErrorPicture,
+} from "./heal-report";
 import {
   applySnapshot,
   createState,
@@ -224,6 +231,13 @@ export async function getFindings(machineId?: string, limit = 50): Promise<Findi
   await hydrate();
   const all = state().findings;
   return (machineId ? all.filter((f) => f.machineId === machineId) : all).slice(0, limit);
+}
+
+/** Fleet "Fehlerbild" computed over the full heal + finding buckets. */
+export async function getErrorPicture(): Promise<MachineErrorPicture[]> {
+  await hydrate();
+  const s = state();
+  return machineErrorPicture(s.findings, s.heals);
 }
 
 export async function getMachines(): Promise<MachineMetrics[]> {

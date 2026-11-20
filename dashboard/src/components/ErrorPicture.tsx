@@ -1,13 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { t } from "@/lib/theme";
-import {
-  machineErrorPicture,
-  type Finding,
-  type HealReport,
-  type MachineErrorPicture,
-} from "@/lib/heal-report";
+import type { MachineErrorPicture } from "@/lib/heal-report";
 
 type MachineName = { machineId: string; hostname: string };
 
@@ -25,19 +20,15 @@ export function pictureSummary(name: string, p: MachineErrorPicture): string {
 }
 
 // Per-machine "Fehlerbild": open findings by severity, fixed count, last fix.
+// Computed server-side over the full buckets (GET /api/error-picture).
 export function ErrorPicture({ machines }: { machines: MachineName[] }) {
-  const [findings, setFindings] = useState<Finding[]>([]);
-  const [heals, setHeals] = useState<HealReport[]>([]);
+  const [pictures, setPictures] = useState<MachineErrorPicture[]>([]);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [fRes, hRes] = await Promise.all([
-          fetch("/api/findings?limit=500", { cache: "no-store" }),
-          fetch("/api/heals?limit=500", { cache: "no-store" }),
-        ]);
-        if (fRes.ok) setFindings((await fRes.json()).findings ?? []);
-        if (hRes.ok) setHeals((await hRes.json()).heals ?? []);
+        const res = await fetch("/api/error-picture", { cache: "no-store" });
+        if (res.ok) setPictures((await res.json()).machines ?? []);
       } catch {
         /* retry on next tick */
       }
@@ -47,7 +38,6 @@ export function ErrorPicture({ machines }: { machines: MachineName[] }) {
     return () => clearInterval(interval);
   }, []);
 
-  const pictures = useMemo(() => machineErrorPicture(findings, heals), [findings, heals]);
   const names = new Map(machines.map((m) => [m.machineId, m.hostname]));
 
   return (
