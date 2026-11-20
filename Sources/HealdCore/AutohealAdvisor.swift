@@ -192,15 +192,23 @@ public enum AutohealAdvisor: Sendable {
         )
     }
 
-    /// Ask the advisor with a hard deadline. `available == false` never calls `ask`.
+    public static let memoryCriticalRationale = "memory critical — advisor skipped"
+    public static let unavailableRationale = "Apple Intelligence unavailable"
+
+    /// Ask the advisor with a hard deadline. Never calls `ask` when the model is unavailable
+    /// or the action is ineligible under critical memory pressure.
     public static func consult(
         ruleAction: HealAction,
         timeout: Duration = defaultTimeout,
         available: Bool,
+        memoryCritical: Bool = false,
         ask: @escaping @Sendable () async -> String?
     ) async -> AdvisorVerdict {
+        guard isEligible(action: ruleAction, memoryCritical: memoryCritical) else {
+            return .rulesFallback(ruleAction, rationale: memoryCriticalRationale)
+        }
         guard available else {
-            return .rulesFallback(ruleAction, rationale: "Apple Intelligence unavailable")
+            return .rulesFallback(ruleAction, rationale: unavailableRationale)
         }
         let clock = ContinuousClock()
         let start = clock.now

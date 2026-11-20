@@ -220,8 +220,8 @@ struct SelfHealOrchestrator: Service {
                 verdict = await AutohealAdvisor.consult(
                     ruleAction: healAction,
                     timeout: timeout,
-                    available: await ai.isAvailable
-                        && AutohealAdvisor.isEligible(action: healAction, memoryCritical: memoryCritical)
+                    available: await ai.isAvailable,
+                    memoryCritical: memoryCritical
                 ) {
                     await ai.adviseHeal(action: key, reason: reason, context: context)
                 }

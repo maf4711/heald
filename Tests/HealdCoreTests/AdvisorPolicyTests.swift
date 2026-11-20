@@ -79,6 +79,19 @@ struct AdvisorPolicyTests {
         }
     }
 
+    @Test func consultLogsMemoryCriticalRationaleWithoutAsking() async {
+        // A consulted model would skip; the verdict proves it was never asked.
+        let v = await AutohealAdvisor.consult(ruleAction: .ramPurge, available: true, memoryCritical: true) {
+            #"{"action":"ram_purge","recommendation":"skip","confidence":1,"rationale":"x"}"#
+        }
+        #expect(v == .rulesFallback(.ramPurge, rationale: "memory critical — advisor skipped"))
+    }
+
+    @Test func consultUnavailableKeepsUnavailableRationale() async {
+        let v = await AutohealAdvisor.consult(ruleAction: .ramPurge, available: false) { nil }
+        #expect(v.rationale == "Apple Intelligence unavailable")
+    }
+
     // MARK: fix 5 — verdict → disposition is pure
 
     @Test func proceedMapsToRun() {
