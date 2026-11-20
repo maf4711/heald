@@ -5,6 +5,11 @@ import Foundation
 /// is not a failure. Negative status = terminated by that signal (e.g. -9).
 extension DiagnosisEngine {
     public static func launchdFailures(from output: String, userName: String? = nil) -> [String: Int] {
+        launchdStatuses(from: output, userName: userName).filter { $0.value != 0 && $0.value != -15 }
+    }
+
+    /// Every listed job with a numeric status (normalised label → last exit status).
+    public static func launchdStatuses(from output: String, userName: String? = nil) -> [String: Int] {
         var out: [String: Int] = [:]
         for raw in output.split(separator: "\n", omittingEmptySubsequences: true) {
             var cols = raw.split(separator: "\t", omittingEmptySubsequences: false)
@@ -12,8 +17,7 @@ extension DiagnosisEngine {
                 cols = raw.split(maxSplits: 2, whereSeparator: { $0 == " " || $0 == "\t" })
             }
             guard cols.count == 3,
-                  let code = Int(cols[1].trimmingCharacters(in: .whitespaces)),
-                  code != 0, code != -15 else { continue }
+                  let code = Int(cols[1].trimmingCharacters(in: .whitespaces)) else { continue }
             let label = normalizeLabel(cols[2].trimmingCharacters(in: .whitespaces), userName: userName)
             guard !label.isEmpty else { continue }
             out[label] = code
@@ -34,14 +38,16 @@ extension DiagnosisEngine {
         return l
     }
 
-    /// Ingest jobs whose failure is new or whose exit status changed since `previous`.
+    /// Ingest jobs whose failure is new or whose exit status changed since `previous`;
+    /// a job that is still listed but no longer failing (status 0 / -15) marks its finding fixed.
     public mutating func ingestLaunchd(
         output: String,
         previous: inout [String: Int],
         at: Date,
         userName: String? = nil
     ) {
-        let current = Self.launchdFailures(from: output, userName: userName)
+        let listed = Self.launchdStatuses(from: output, userName: userName)
+        let current = listed.filter { $0.value != 0 && $0.value != -15 }
         for (label, code) in current.sorted(by: { $0.key < $1.key }) where previous[label] != code {
             ingest(Observation(
                 category: .launchdJob,
@@ -54,6 +60,17 @@ extension DiagnosisEngine {
             ))
         }
         previous = current
+        // Recovery: listed again without a failing status → fixed (lastSeen stays the last failure).
+        // Jobs no longer listed (unloaded) are unknown and stay open.
+        for f in findings where f.category == .launchdJob && f.status != .fixed {
+            guard let label = Self.launchdLabel(fromSample: f.sample),
+                  listed[label] != nil, current[label] == nil else { continue }
+            markFixed(f.fingerprint)
+        }
+    }
+
+    static func launchdLabel(fromSample sample: String) -> String? {
+        RegexCache.firstMatch(#"^launchd job (\S+) last exit status -?\d+$"#, in: sample)
     }
 
     /// SIGKILL (-9) of an Apple agent is almost always jetsam / memory pressure → warning;
@@ -67,7 +84,7 @@ extension DiagnosisEngine {
     public func launchdBaseline() -> [String: Int] {
         var out: [String: Int] = [:]
         for f in findings where f.category == .launchdJob && f.status != .fixed {
-            guard let label = RegexCache.firstMatch(#"^launchd job (\S+) last exit status -?\d+$"#, in: f.sample),
+            guard let label = Self.launchdLabel(fromSample: f.sample),
                   let code = RegexCache.firstMatch(#"last exit status (-?\d+)$"#, in: f.sample).flatMap({ Int($0) })
             else { continue }
             out[label] = code

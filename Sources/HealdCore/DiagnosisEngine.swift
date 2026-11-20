@@ -198,6 +198,13 @@ public struct DiagnosisEngine: Sendable {
         evict()
     }
 
+    /// Resolve without a heal (e.g. a launchd job that recovered on its own).
+    mutating func markFixed(_ fingerprint: String) {
+        guard byFingerprint[fingerprint]?.status != .fixed, byFingerprint[fingerprint] != nil else { return }
+        byFingerprint[fingerprint]?.status = .fixed
+        revision += 1
+    }
+
     /// Hard device cap `maxFindings`: evict fixed findings first (oldest lastSeen), then the
     /// oldest open/recurring ones — the dashboard keeps at most 500 per machine.
     private mutating func evict() {
