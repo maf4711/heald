@@ -86,7 +86,7 @@ public struct DiagnosisEngine: Sendable {
 
     public static func fingerprint(category: FindingCategory, component: String, signature: String) -> String {
         let prefix = category == .launchdJob ? "launchd" : category.rawValue
-        let parts = [prefix, cap(redactPaths(component), Finding.maxShort)]
+        let parts = [prefix, normalizedComponent(component)]
             + (signature.isEmpty ? [] : [redactPaths(signature)])
         return cap(parts.joined(separator: ":"), Finding.maxFingerprint)
     }
@@ -98,6 +98,11 @@ public struct DiagnosisEngine: Sendable {
     /// `/Users/<name>/…` → `/Users/~/…` so fingerprints and samples carry no user names.
     public static func redactPaths(_ s: String) -> String {
         RegexCache.replace(#"/Users/[^/\s"]+"#, in: s, with: "/Users/~")
+    }
+
+    /// Component as stored in findings and fingerprints: user paths redacted, capped to `maxShort`.
+    static func normalizedComponent(_ component: String) -> String {
+        cap(redactPaths(component), Finding.maxShort)
     }
 
     /// Cap to `n` UTF-16 units (JS `String.length`, as the dashboard validator counts),
@@ -119,7 +124,7 @@ public struct DiagnosisEngine: Sendable {
     /// same component that is not fixed and was seen within `faultMergeWindow`; else `fault:<proc>`.
     public func resolveFingerprint(for o: Observation) -> String {
         if o.category == .fault, o.source == .unifiedLog {
-            let component = Self.cap(Self.redactPaths(o.component), Finding.maxShort)
+            let component = Self.normalizedComponent(o.component)
             if let crash = byFingerprint.values
                 .filter({
                     $0.category == .crash && $0.component == component && $0.status != .fixed
@@ -147,7 +152,7 @@ public struct DiagnosisEngine: Sendable {
                 machineId: machineId,
                 fingerprint: fp,
                 category: o.category,
-                component: Self.cap(Self.redactPaths(o.component), Finding.maxShort),
+                component: Self.normalizedComponent(o.component),
                 severity: severity,
                 count: 1,
                 firstSeen: o.at,
@@ -200,7 +205,7 @@ public struct DiagnosisEngine: Sendable {
 
     /// Resolve without a heal (e.g. a launchd job that recovered on its own).
     mutating func markFixed(_ fingerprint: String) {
-        guard byFingerprint[fingerprint]?.status != .fixed, byFingerprint[fingerprint] != nil else { return }
+        guard let f = byFingerprint[fingerprint], f.status != .fixed else { return }
         byFingerprint[fingerprint]?.status = .fixed
         revision += 1
     }

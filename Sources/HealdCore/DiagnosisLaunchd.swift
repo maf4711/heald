@@ -5,8 +5,11 @@ import Foundation
 /// is not a failure. Negative status = terminated by that signal (e.g. -9).
 extension DiagnosisEngine {
     public static func launchdFailures(from output: String, userName: String? = nil) -> [String: Int] {
-        launchdStatuses(from: output, userName: userName).filter { $0.value != 0 && $0.value != -15 }
+        launchdStatuses(from: output, userName: userName).filter { isLaunchdFailure($0.value) }
     }
+
+    /// Non-zero exit status, except SIGTERM on unload (-15).
+    static func isLaunchdFailure(_ code: Int) -> Bool { code != 0 && code != -15 }
 
     /// Every listed job with a numeric status (normalised label → last exit status).
     public static func launchdStatuses(from output: String, userName: String? = nil) -> [String: Int] {
@@ -47,7 +50,7 @@ extension DiagnosisEngine {
         userName: String? = nil
     ) {
         let listed = Self.launchdStatuses(from: output, userName: userName)
-        let current = listed.filter { $0.value != 0 && $0.value != -15 }
+        let current = listed.filter { Self.isLaunchdFailure($0.value) }
         for (label, code) in current.sorted(by: { $0.key < $1.key }) where previous[label] != code {
             ingest(Observation(
                 category: .launchdJob,
