@@ -32,6 +32,11 @@ export interface DeviceRegistryOptions extends Omit<CasOptions, "knownEtag"> {
   now?: () => Date;
   /** Persist lastSeen at most this often per device (default 15 min). */
   touchIntervalMs?: number;
+  /**
+   * Run background work (the lastSeen write) without delaying the request:
+   * Next's after()/waitUntil in prod. Default: unawaited, errors swallowed.
+   */
+  defer?: (work: Promise<unknown>) => void;
 }
 
 export function hashToken(token: string): string {
@@ -72,6 +77,7 @@ export function createDeviceRegistry({
   now = () => new Date(),
   touchIntervalMs = 15 * 60_000,
   missReloadIntervalMs = 10_000,
+  defer = () => {},
   ...cas
 }: DeviceRegistryOptions) {
   let devices: DeviceRecord[] = [];
@@ -127,16 +133,20 @@ export function createDeviceRegistry({
     return i === -1 ? undefined : devices[i];
   };
 
-  /** Persist lastSeen at most once per touchIntervalMs; failures are ignored. */
-  async function touch(d: DeviceRecord) {
+  /**
+   * Persist lastSeen at most once per touchIntervalMs, in the background
+   * (never awaited by the request: ingest must answer within the daemon's
+   * timeout). Failures are ignored: lastSeen is informational.
+   */
+  function touch(d: DeviceRecord) {
     const ts = now();
     if (d.lastSeen && ts.getTime() - Date.parse(d.lastSeen) < touchIntervalMs) return;
     d.lastSeen = ts.toISOString();
-    try {
-      await update((list) => list.map((x) => (x.deviceId === d.deviceId ? { ...x, lastSeen: d.lastSeen } : x)));
-    } catch {
-      /* lastSeen is informational */
-    }
+    const lastSeen = d.lastSeen;
+    const work = update((list) => list.map((x) => (x.deviceId === d.deviceId ? { ...x, lastSeen } : x))).catch(
+      () => {},
+    );
+    defer(work);
   }
 
   return {
@@ -157,7 +167,7 @@ export function createDeviceRegistry({
         d = lookup(hash);
       }
       if (!d) return false;
-      await touch(d);
+      touch(d);
       return true;
     },
 

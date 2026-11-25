@@ -66,6 +66,8 @@ export interface Finding {
   sources?: string[];
   sample?: string;
   detail?: string;
+  /** When the linked heal succeeded (daemon); orders same-observation updates. */
+  healedAt?: string | null;
 }
 
 export type Validation = { ok: true } | { ok: false; reason: string };
@@ -191,6 +193,7 @@ export function validateFinding(v: unknown, now: number = Date.now()): Validatio
     num(v.recurrenceCount, "recurrenceCount"),
     iso(v.firstSeen, "firstSeen", now),
     iso(v.lastSeen, "lastSeen", now, { noFuture: true }),
+    iso(v.healedAt, "healedAt", now, { noFuture: true }),
     str(v.sample, "sample", MAX_SAMPLE_CHARS),
     sourcesCheck(v.sources),
     str(v.detail, "detail", MAX_DETAIL_CHARS),
@@ -210,7 +213,7 @@ const HEAL_KEYS = [
 const ADVISOR_KEYS = ["source", "recommendation", "confidence", "rationale", "latencyMs"] as const;
 const FINDING_KEYS = [
   "schema", "machineId", "fingerprint", "category", "component", "severity", "count", "status",
-  "recurrenceCount", "linkedAction", "firstSeen", "lastSeen", "sources", "sample", "detail",
+  "recurrenceCount", "linkedAction", "firstSeen", "lastSeen", "sources", "sample", "detail", "healedAt",
 ] as const;
 
 /** Copy only known heal fields (call after validateHealReport). */
@@ -248,17 +251,36 @@ const timeOf = (iso: string | undefined) => {
   return Number.isFinite(t) ? t : -Infinity;
 };
 
+/** Lifecycle order within one observation: the daemon only moves open|recurring → fixed. */
+const STATUS_RANK: Record<string, number> = { open: 0, recurring: 1, fixed: 2 };
+
+/** Positive when `a` is further along than `b`; NaN-safe (-Infinity for missing times). */
+function cmpTime(a: string | undefined | null, b: string | undefined | null): number {
+  const d = timeOf(a ?? undefined) - timeOf(b ?? undefined);
+  return Number.isNaN(d) ? 0 : d;
+}
+
 /**
- * Does `candidate` replace `current` (same machine + fingerprint)? Newer
- * lastSeen wins; on equal lastSeen the higher count wins; a full tie goes
- * to `candidateWinsTie`. Makes merges order-independent (PR #22 review B1).
+ * Does `candidate` replace `current` (same machine + fingerprint)? Merges
+ * must be order-independent (PR #22 review). A new observation bumps
+ * lastSeen/count (fixed → recurring also bumps recurrenceCount); a heal only
+ * changes linkedAction/healedAt and then status → fixed, with lastSeen and
+ * count unchanged (DiagnosisEngine.recordHeal / refresh / markFixed). So rank:
+ * lastSeen, count, recurrenceCount, status (fixed > recurring > open), newer
+ * healedAt, linkedAction present. Only a full tie (same lifecycle state) goes
+ * to `candidateWinsTie`.
  */
 function findingWins(candidate: Finding, current: Finding, candidateWinsTie: boolean): boolean {
-  const dt = timeOf(candidate.lastSeen) - timeOf(current.lastSeen);
-  if (dt !== 0 && !Number.isNaN(dt)) return dt > 0;
-  const dc = (candidate.count ?? 0) - (current.count ?? 0);
-  if (dc !== 0) return dc > 0;
-  return candidateWinsTie;
+  const steps = [
+    cmpTime(candidate.lastSeen, current.lastSeen),
+    (candidate.count ?? 0) - (current.count ?? 0),
+    (candidate.recurrenceCount ?? 0) - (current.recurrenceCount ?? 0),
+    (STATUS_RANK[candidate.status] ?? 0) - (STATUS_RANK[current.status] ?? 0),
+    cmpTime(candidate.healedAt, current.healedAt),
+    Number(!!candidate.linkedAction) - Number(!!current.linkedAction),
+  ];
+  const decisive = steps.find((d) => d !== 0);
+  return decisive === undefined ? candidateWinsTie : decisive > 0;
 }
 
 /**

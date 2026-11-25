@@ -6,6 +6,7 @@
  * (comma-separated) is still accepted for bootstrap.
  * Without BLOB_READ_WRITE_TOKEN (local dev) it is in-memory only.
  */
+import { after } from "next/server";
 import { blobJsonIO, blobRequired } from "./blob-json";
 import { createDeviceRegistry, type DeviceRegistry, type PublicDevice, type RegistryDoc } from "./device-registry";
 
@@ -18,6 +19,19 @@ function envTokens(): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Keep the lastSeen write alive after the response is sent: Next's after()
+ * maps to waitUntil on Vercel. Outside a request scope after() throws; the
+ * work then simply runs unawaited (it never rejects).
+ */
+function defer(work: Promise<unknown>) {
+  try {
+    after(() => work);
+  } catch {
+    /* not in a request scope */
+  }
+}
+
 const g = globalThis as typeof globalThis & { __healdDeviceRegistry?: DeviceRegistry };
 
 function registry(): DeviceRegistry {
@@ -25,6 +39,7 @@ function registry(): DeviceRegistry {
     io: blobJsonIO<RegistryDoc>(BLOB_PATHNAME),
     requireRemote: blobRequired(),
     envTokens,
+    defer,
   });
   return g.__healdDeviceRegistry;
 }

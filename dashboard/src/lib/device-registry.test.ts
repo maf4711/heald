@@ -123,16 +123,24 @@ test("#17 in-memory fallback without a blob token", async () => {
 test("#17 a known token is served from memory; lastSeen persisted at most once per interval", async () => {
   const blob = new FakeDoc();
   let now = new Date("2026-11-21T10:00:00Z");
-  const reg = createDeviceRegistry({ io: blob.io(), now: () => now, touchIntervalMs: 60_000, ...noSleep });
+  const background: Promise<unknown>[] = [];
+  const reg = createDeviceRegistry({
+    io: blob.io(),
+    now: () => now,
+    touchIntervalMs: 60_000,
+    defer: (p) => background.push(p), // touch runs in the background (waitUntil)
+    ...noSleep,
+  });
   await reg.register({ deviceId: "dev-a", token: TOKEN_A });
   const v = blob.version;
   const reads = blob.reads;
   now = new Date("2026-11-21T10:00:30Z");
   assert.equal(await reg.authenticate(TOKEN_A), true);
-  assert.equal(blob.version, v, "no write inside the interval");
+  assert.equal(background.length, 0, "no write inside the interval");
   assert.equal(blob.reads, reads, "hit served from memory");
   now = new Date("2026-11-21T10:02:00Z");
   assert.equal(await reg.authenticate(TOKEN_A), true);
+  await Promise.all(background);
   assert.equal(blob.version, v + 1, "lastSeen persisted after the interval");
   const doc = JSON.parse(blob.doc!) as RegistryDoc;
   assert.equal(doc.devices[0].lastSeen, "2026-11-21T10:02:00.000Z");
