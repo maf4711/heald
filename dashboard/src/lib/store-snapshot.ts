@@ -3,6 +3,7 @@
 // by heal-report.test.ts with node --test.
 
 import { mergeHealBuckets, type Finding, type HealReport } from "./heal-report.ts";
+import { casUpdate, type CasOptions, type DocIO } from "./blob-cas.ts";
 
 export interface MachineMetrics {
   machineId: string;
@@ -190,31 +191,21 @@ export function applySnapshot(s: StoreState, data: Partial<StoreSnapshot>) {
   }
 }
 
-export const MAX_PERSIST_ATTEMPTS = 3;
-
-export interface SnapshotIO<T = StoreSnapshot> {
-  /** Current remote snapshot + its ETag, or null when none exists yet. */
-  read(): Promise<{ snapshot: T; etag?: string } | null>;
-  /** Write; must throw when `etag` no longer matches (optimistic concurrency). */
-  write(snapshot: T, etag: string | undefined): Promise<void>;
-  isConflict(err: unknown): boolean;
-}
+export type SnapshotIO<T = StoreSnapshot> = DocIO<T>;
 
 /**
- * Read-merge-write with ETag precondition: merges a concurrent writer's
- * snapshot into `s` (applySnapshot is idempotent), writes with `ifMatch`,
- * and retries up to MAX_PERSIST_ATTEMPTS on conflict. Returns true on success.
+ * Read-merge-write with ETag precondition: merges the remote snapshot into
+ * `s` (applySnapshot is idempotent), writes with `ifMatch` (create-only when
+ * no blob exists yet) and retries on conflict. Resolves with the new ETag
+ * only once the write landed; throws PersistError otherwise.
  */
-export async function mergeAndWrite(s: StoreState, io: SnapshotIO): Promise<boolean> {
-  for (let attempt = 0; attempt < MAX_PERSIST_ATTEMPTS; attempt++) {
-    const remote = await io.read();
-    if (remote) applySnapshot(s, remote.snapshot);
-    try {
-      await io.write(snapshotFromState(s), remote?.etag);
-      return true;
-    } catch (err) {
-      if (!io.isConflict(err)) return false;
-    }
-  }
-  return false;
+export function mergeAndWrite(s: StoreState, io: SnapshotIO, opts?: CasOptions): Promise<string | undefined> {
+  return casUpdate(
+    io,
+    (remote) => {
+      if (remote) applySnapshot(s, remote);
+      return snapshotFromState(s);
+    },
+    opts,
+  );
 }

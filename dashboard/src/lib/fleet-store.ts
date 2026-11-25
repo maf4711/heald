@@ -25,6 +25,7 @@ import {
   type StoreSnapshot,
   type StoreState,
 } from "./store-snapshot.ts";
+import type { CasOptions } from "./blob-cas.ts";
 
 const MAX_HISTORY_PER_MACHINE = 720;
 const MAX_BENCHMARK_HISTORY = 90;
@@ -34,7 +35,7 @@ export interface TmpCache {
   write(snap: StoreSnapshot): void;
 }
 
-export interface FleetStoreOptions {
+export interface FleetStoreOptions extends CasOptions {
   /** Remote snapshot (Vercel Blob); null when no BLOB_READ_WRITE_TOKEN. */
   io: SnapshotIO | null;
   tmp?: TmpCache;
@@ -48,64 +49,67 @@ function forMachine<T extends { machineId: string }>(all: T[], machineId: string
   return (machineId ? all.filter((x) => x.machineId === machineId) : all).slice(0, limit);
 }
 
-export function createFleetStore({ io, tmp, state }: FleetStoreOptions) {
+export function createFleetStore({ io, tmp, state, ...cas }: FleetStoreOptions) {
   const s = state ?? createState();
   // Backfill buckets on a state object created before GOAL 4 (warm isolate / dev HMR)
   s.heals ??= [];
   s.findings ??= [];
+  /** ETag of the remote snapshot last merged into `s` (conditional re-reads). */
+  let lastEtag: string | undefined;
+  /** Serialises flushes on this instance so concurrent requests don't race each other. */
+  let flushChain: Promise<unknown> = Promise.resolve();
 
-  async function readRemote(): Promise<Partial<StoreSnapshot> | null> {
-    if (!io) return null;
-    try {
-      return (await io.read())?.snapshot ?? null;
-    } catch {
-      return null;
-    }
-  }
-
-  async function hydrate() {
-    if (s.hydrated && s.machines.size > 0) return;
-
+  function hydrateLocal() {
+    if (s.hydrated) return;
     const cached = tmp?.read();
     if (cached) applySnapshot(s, cached);
-
-    // Always try blob when machines empty (cross-instance recovery)
-    if (s.machines.size === 0) {
-      const remote = await readRemote();
-      if (remote) {
-        applySnapshot(s, remote);
-        tmp?.write(snapshotFromState(s));
-      }
-    }
-
     s.hydrated = true;
   }
 
-  async function persist() {
-    if (io) {
-      try {
-        await mergeAndWrite(s, io);
-      } catch {
-        /* optional durability path */
-      }
+  /**
+   * Merge whatever other instances persisted since our last look. Uses
+   * If-None-Match, so an unchanged blob costs a 304. Read errors are
+   * tolerated: the caller then serves this instance's memory.
+   */
+  async function refresh() {
+    hydrateLocal();
+    if (!io) return;
+    try {
+      const remote = await io.read(lastEtag);
+      if (!remote || remote.notModified) return;
+      applySnapshot(s, remote.snapshot);
+      lastEtag = remote.etag;
+    } catch {
+      /* degraded read: serve memory */
     }
+  }
+
+  async function persist() {
+    if (io) lastEtag = await mergeAndWrite(s, io, cas); // throws PersistError → caller answers 5xx
     tmp?.write(snapshotFromState(s));
   }
 
-  /** Persist once after a batch of `{ persist: false }` writes (one blob write per ingest). */
-  async function flush() {
-    await persist();
+  /**
+   * Persist once after a batch of `{ persist: false }` writes (one blob
+   * read-merge-write per ingest). Resolves only when the snapshot is durably
+   * in the blob; rejects with PersistError otherwise.
+   */
+  function flush(): Promise<void> {
+    const run = flushChain.then(persist);
+    flushChain = run.catch(() => {});
+    return run;
   }
 
   /** Hydrate, apply `change`, then persist unless the caller defers to flush(). */
   async function write(opts: WriteOptions, change: (s: StoreState) => void) {
-    await hydrate();
+    hydrateLocal(); // remote state is merged by mergeAndWrite at flush time
     change(s);
-    if (opts.persist !== false) await persist();
+    if (opts.persist !== false) await flush();
   }
 
+  /** Reads always merge the latest blob first (read-after-write across instances). */
   async function read<T>(get: (s: StoreState) => T): Promise<T> {
-    await hydrate();
+    await refresh();
     return get(s);
   }
 
