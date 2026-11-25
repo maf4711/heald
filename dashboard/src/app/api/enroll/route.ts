@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { validateAdminKey, validateApiKey, extractBearer } from "@/lib/auth";
 import { listDevices, registerDevice } from "@/lib/devices";
+import { PersistError } from "@/lib/blob-cas";
 
 /**
  * POST /api/enroll — register a device token (admin key required)
@@ -19,7 +20,8 @@ export async function POST(request: Request) {
     if (!deviceId || !token || token.length < 16) {
       return NextResponse.json({ error: "deviceId and token (min 16) required" }, { status: 400 });
     }
-    const d = registerDevice({
+    // Durable in Vercel Blob before we answer 200 (issue #17)
+    const d = await registerDevice({
       deviceId,
       token,
       hostname: body.hostname ? String(body.hostname) : undefined,
@@ -30,7 +32,11 @@ export async function POST(request: Request) {
       deviceId: d.deviceId,
       enrolledAt: d.enrolledAt,
     });
-  } catch {
+  } catch (err) {
+    if (err instanceof PersistError) {
+      console.error("enroll: registry not persisted", err);
+      return NextResponse.json({ error: "Storage unavailable, retry later" }, { status: 503 });
+    }
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 }
@@ -38,10 +44,10 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   // Admin lists devices
   if (validateAdminKey(request)) {
-    return NextResponse.json({ devices: listDevices() });
+    return NextResponse.json({ devices: await listDevices() });
   }
   // Device token: confirm valid
-  if (validateApiKey(request)) {
+  if (await validateApiKey(request)) {
     const token = extractBearer(request);
     return NextResponse.json({ ok: true, auth: "device_or_key", tokenPrefix: token?.slice(0, 8) });
   }
