@@ -45,10 +45,12 @@ const TOKEN_B = "token-b-0123456789abcdef";
 
 test("#17 a token enrolled on one instance authenticates on another (and after a cold start)", async () => {
   const blob = new FakeDoc();
+  let now = new Date("2026-11-21T10:00:00Z");
   const a = createDeviceRegistry({ io: blob.io(), ...noSleep });
-  const b = createDeviceRegistry({ io: blob.io(), ...noSleep });
+  const b = createDeviceRegistry({ io: blob.io(), now: () => now, ...noSleep });
   assert.equal(await b.authenticate(TOKEN_A), false); // warm B with an empty view
   await a.register({ deviceId: "dev-a", token: TOKEN_A, hostname: "node-a" });
+  now = new Date("2026-11-21T10:00:11Z"); // past the 10 s miss-reload limit
 
   assert.equal(await b.authenticate(TOKEN_A), true, "warm instance re-reads on a miss");
   const cold = createDeviceRegistry({ io: blob.io(), ...noSleep });

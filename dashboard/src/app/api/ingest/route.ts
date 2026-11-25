@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { validateApiKey } from "@/lib/auth";
 import { upsertMachine, addEvent, addHeals, addFindings, flush } from "@/lib/store";
 import { ingestBody } from "@/lib/heal-report";
+import { validEvents } from "@/lib/store-snapshot";
 
 // POST /api/ingest — receives metric push from daemon (CLOUD-02)
 // plus heal reports (heald.heal_report/v1) and findings (heald.findings/v1).
@@ -31,14 +32,14 @@ export async function POST(request: Request) {
   try {
     // Buffer every write, then persist once (one blob read-merge-write per request)
     const deferred = { persist: false };
-    if (body.metrics) {
-      await upsertMachine(body.metrics as Parameters<typeof upsertMachine>[0], deferred);
+    const metrics = body.metrics;
+    if (typeof metrics === "object" && metrics !== null && !Array.isArray(metrics)) {
+      await upsertMachine(metrics as Parameters<typeof upsertMachine>[0], deferred);
     }
 
-    if (Array.isArray(body.events)) {
-      for (const event of body.events) {
-        await addEvent(event, deferred);
-      }
+    // Drop malformed events: one poisoned entry must never reach the shared snapshot
+    for (const event of validEvents(body.events)) {
+      await addEvent(event, deferred);
     }
 
     if (result.heals.length) await addHeals(result.heals, deferred);

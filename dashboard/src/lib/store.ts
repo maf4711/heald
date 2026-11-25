@@ -9,7 +9,7 @@ import { readFileSync, writeFileSync, renameSync, existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { createFleetStore, type FleetStore, type TmpCache } from "./fleet-store";
-import { blobJsonIO } from "./blob-json";
+import { blobJsonIO, blobRequired } from "./blob-json";
 import type { StoreSnapshot } from "./store-snapshot";
 
 export type { ActivityEntry, BenchmarkResult, MachineMetrics, ProcessEntry } from "./store-snapshot";
@@ -45,7 +45,11 @@ const tmpCache: TmpCache = {
 const g = globalThis as typeof globalThis & { __healdFleetStore?: FleetStore };
 
 function store(): FleetStore {
-  g.__healdFleetStore ??= createFleetStore({ io: blobJsonIO<StoreSnapshot>(BLOB_PATHNAME), tmp: tmpCache });
+  g.__healdFleetStore ??= createFleetStore({
+    io: blobJsonIO<StoreSnapshot>(BLOB_PATHNAME),
+    requireRemote: blobRequired(), // prod without token → ingest 503, not memory-only 200
+    tmp: tmpCache,
+  });
   return g.__healdFleetStore;
 }
 

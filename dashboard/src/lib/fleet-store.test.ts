@@ -76,7 +76,9 @@ class FakeBlob {
 const noSleep = { sleep: async () => {} };
 
 function instance(blob: FakeBlob): FleetStore {
-  return createFleetStore({ io: blob.io(), ...noSleep });
+  // Interval 0: these tests assert cross-instance read-after-write itself;
+  // the 3 s coalescing window is covered in ingest-hardening.test.ts.
+  return createFleetStore({ io: blob.io(), refreshMinIntervalMs: 0, ...noSleep });
 }
 
 /** What POST /api/ingest does: buffer, then one flush. Resolves = 2xx. */

@@ -25,21 +25,29 @@ import {
   type StoreSnapshot,
   type StoreState,
 } from "./store-snapshot.ts";
-import type { CasOptions } from "./blob-cas.ts";
+import { PersistError, READ_DEADLINE_MS, withDeadline, type CasOptions } from "./blob-cas.ts";
 
 const MAX_HISTORY_PER_MACHINE = 720;
 const MAX_BENCHMARK_HISTORY = 90;
+/** GET pages poll every 5 s and /api/machines reads 1+2N times: coalesce. */
+export const REFRESH_MIN_INTERVAL_MS = 3000;
 
 export interface TmpCache {
   read(): StoreSnapshot | null;
   write(snap: StoreSnapshot): void;
 }
 
-export interface FleetStoreOptions extends CasOptions {
+export interface FleetStoreOptions extends Omit<CasOptions, "knownEtag"> {
   /** Remote snapshot (Vercel Blob); null when no BLOB_READ_WRITE_TOKEN. */
   io: SnapshotIO | null;
+  /** No remote is a misconfiguration (prod): flush throws instead of memory-only. */
+  requireRemote?: boolean;
   tmp?: TmpCache;
   state?: StoreState;
+  /** Reads re-check the blob at most this often per instance. */
+  refreshMinIntervalMs?: number;
+  /** Budget for one GET-path blob read (defaults to deadlineMs or READ_DEADLINE_MS). */
+  readDeadlineMs?: number;
 }
 
 /** Write options: `persist: false` defers the write to a later flush(). */
@@ -49,7 +57,16 @@ function forMachine<T extends { machineId: string }>(all: T[], machineId: string
   return (machineId ? all.filter((x) => x.machineId === machineId) : all).slice(0, limit);
 }
 
-export function createFleetStore({ io, tmp, state, ...cas }: FleetStoreOptions) {
+export function createFleetStore({
+  io,
+  requireRemote = false,
+  tmp,
+  state,
+  refreshMinIntervalMs = REFRESH_MIN_INTERVAL_MS,
+  readDeadlineMs,
+  ...cas
+}: FleetStoreOptions) {
+  const readBudget = readDeadlineMs ?? cas.deadlineMs ?? READ_DEADLINE_MS;
   const s = state ?? createState();
   // Backfill buckets on a state object created before GOAL 4 (warm isolate / dev HMR)
   s.heals ??= [];
@@ -58,6 +75,8 @@ export function createFleetStore({ io, tmp, state, ...cas }: FleetStoreOptions) 
   let lastEtag: string | undefined;
   /** Serialises flushes on this instance so concurrent requests don't race each other. */
   let flushChain: Promise<unknown> = Promise.resolve();
+  let lastRefreshAt = -Infinity;
+  let inflightRefresh: Promise<void> | null = null;
 
   function hydrateLocal() {
     if (s.hydrated) return;
@@ -66,26 +85,44 @@ export function createFleetStore({ io, tmp, state, ...cas }: FleetStoreOptions) 
     s.hydrated = true;
   }
 
+  async function doRefresh(remoteIO: SnapshotIO) {
+    try {
+      const remote = await withDeadline(readBudget, (signal) => remoteIO.read(lastEtag, signal));
+      if (remote && !remote.notModified) {
+        applySnapshot(s, remote.snapshot);
+        lastEtag = remote.etag;
+      }
+    } catch {
+      /* degraded read (error / deadline): serve memory */
+    }
+    lastRefreshAt = Date.now();
+  }
+
   /**
    * Merge whatever other instances persisted since our last look. Uses
-   * If-None-Match, so an unchanged blob costs a 304. Read errors are
-   * tolerated: the caller then serves this instance's memory.
+   * If-None-Match (an unchanged blob costs a 304), shares one in-flight read
+   * between concurrent callers, and re-checks at most every
+   * refreshMinIntervalMs. Read errors are tolerated: callers serve memory.
    */
-  async function refresh() {
+  function refresh(): Promise<void> {
     hydrateLocal();
-    if (!io) return;
-    try {
-      const remote = await io.read(lastEtag);
-      if (!remote || remote.notModified) return;
-      applySnapshot(s, remote.snapshot);
-      lastEtag = remote.etag;
-    } catch {
-      /* degraded read: serve memory */
-    }
+    if (!io) return Promise.resolve();
+    if (inflightRefresh) return inflightRefresh;
+    if (Date.now() - lastRefreshAt < refreshMinIntervalMs) return Promise.resolve();
+    inflightRefresh = doRefresh(io).finally(() => {
+      inflightRefresh = null;
+    });
+    return inflightRefresh;
   }
 
   async function persist() {
-    if (io) lastEtag = await mergeAndWrite(s, io, cas); // throws PersistError → caller answers 5xx
+    if (io) {
+      // throws PersistError (error / conflicts / deadline) → caller answers 5xx
+      lastEtag = await mergeAndWrite(s, io, { ...cas, knownEtag: lastEtag });
+      lastRefreshAt = Date.now(); // the merge just pulled in the latest remote
+    } else if (requireRemote) {
+      throw new PersistError("blob storage not configured (BLOB_READ_WRITE_TOKEN missing)");
+    }
     tmp?.write(snapshotFromState(s));
   }
 

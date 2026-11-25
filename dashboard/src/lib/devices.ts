@@ -6,7 +6,7 @@
  * (comma-separated) is still accepted for bootstrap.
  * Without BLOB_READ_WRITE_TOKEN (local dev) it is in-memory only.
  */
-import { blobJsonIO } from "./blob-json";
+import { blobJsonIO, blobRequired } from "./blob-json";
 import { createDeviceRegistry, type DeviceRegistry, type PublicDevice, type RegistryDoc } from "./device-registry";
 
 const BLOB_PATHNAME = "heald-device-registry.json";
@@ -21,7 +21,11 @@ function envTokens(): string[] {
 const g = globalThis as typeof globalThis & { __healdDeviceRegistry?: DeviceRegistry };
 
 function registry(): DeviceRegistry {
-  g.__healdDeviceRegistry ??= createDeviceRegistry({ io: blobJsonIO<RegistryDoc>(BLOB_PATHNAME), envTokens });
+  g.__healdDeviceRegistry ??= createDeviceRegistry({
+    io: blobJsonIO<RegistryDoc>(BLOB_PATHNAME),
+    requireRemote: blobRequired(),
+    envTokens,
+  });
   return g.__healdDeviceRegistry;
 }
 

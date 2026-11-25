@@ -13,13 +13,19 @@ export async function POST(request: Request) {
   if (!validateAdminKey(request)) {
     return NextResponse.json({ error: "Unauthorized — admin key required" }, { status: 401 });
   }
+  let body: Record<string, unknown>;
   try {
-    const body = await request.json();
-    const deviceId = String(body.deviceId ?? "").trim();
-    const token = String(body.token ?? "").trim();
-    if (!deviceId || !token || token.length < 16) {
-      return NextResponse.json({ error: "deviceId and token (min 16) required" }, { status: 400 });
-    }
+    body = await request.json();
+    if (typeof body !== "object" || body === null || Array.isArray(body)) throw new Error("not an object");
+  } catch {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
+  const deviceId = String(body.deviceId ?? "").trim();
+  const token = String(body.token ?? "").trim();
+  if (!deviceId || !token || token.length < 16) {
+    return NextResponse.json({ error: "deviceId and token (min 16) required" }, { status: 400 });
+  }
+  try {
     // Durable in Vercel Blob before we answer 200 (issue #17)
     const d = await registerDevice({
       deviceId,
@@ -37,7 +43,8 @@ export async function POST(request: Request) {
       console.error("enroll: registry not persisted", err);
       return NextResponse.json({ error: "Storage unavailable, retry later" }, { status: 503 });
     }
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    console.error("enroll: unexpected error", err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
 

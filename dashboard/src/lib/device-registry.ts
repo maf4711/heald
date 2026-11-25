@@ -4,7 +4,7 @@
 // constant time. devices.ts binds one instance per isolate.
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import { casUpdate, type CasOptions, type DocIO } from "./blob-cas.ts";
+import { casUpdate, PersistError, READ_DEADLINE_MS, withDeadline, type CasOptions, type DocIO } from "./blob-cas.ts";
 
 export type DeviceRecord = {
   deviceId: string;
@@ -21,8 +21,12 @@ export type RegistryDoc = { version: 1; devices: DeviceRecord[] };
 /** Device as listed to admins: no hash, only a short fingerprint of it. */
 export type PublicDevice = Omit<DeviceRecord, "tokenHash"> & { tokenFingerprint: string };
 
-export interface DeviceRegistryOptions extends CasOptions {
+export interface DeviceRegistryOptions extends Omit<CasOptions, "knownEtag"> {
   io: DocIO<RegistryDoc> | null;
+  /** No remote is a misconfiguration (prod): register throws instead of memory-only. */
+  requireRemote?: boolean;
+  /** Unknown tokens trigger a registry reload at most this often (default 10 s). */
+  missReloadIntervalMs?: number;
   /** Bootstrap tokens (HEALD_DEVICE_TOKENS); read on every call. */
   envTokens?: () => string[];
   now?: () => Date;
@@ -63,13 +67,17 @@ function validDoc(doc: unknown): DeviceRecord[] {
 
 export function createDeviceRegistry({
   io,
+  requireRemote = false,
   envTokens = () => [],
   now = () => new Date(),
   touchIntervalMs = 15 * 60_000,
+  missReloadIntervalMs = 10_000,
   ...cas
 }: DeviceRegistryOptions) {
   let devices: DeviceRecord[] = [];
   let lastEtag: string | undefined;
+  let lastMissReload = -Infinity;
+  const readBudget = cas.deadlineMs ?? READ_DEADLINE_MS;
 
   function load(list: DeviceRecord[]) {
     // Keep a newer in-memory lastSeen (touches are persisted lazily)
@@ -83,8 +91,9 @@ export function createDeviceRegistry({
   /** Re-read the remote registry (304 when unchanged). Read errors keep memory. */
   async function refresh() {
     if (!io) return;
+    const remoteIO = io;
     try {
-      const remote = await io.read(lastEtag);
+      const remote = await withDeadline(readBudget, (signal) => remoteIO.read(lastEtag, signal));
       if (!remote || remote.notModified) return;
       load(validDoc(remote.snapshot));
       lastEtag = remote.etag;
@@ -96,17 +105,19 @@ export function createDeviceRegistry({
   /** CAS-update the remote registry with `change` applied to the remote list. */
   async function update(change: (list: DeviceRecord[]) => DeviceRecord[]) {
     if (!io) {
+      if (requireRemote) throw new PersistError("blob storage not configured (BLOB_READ_WRITE_TOKEN missing)");
       devices = change(devices);
       return;
     }
     let written: DeviceRecord[] = [];
     lastEtag = await casUpdate(
       io,
-      (remote): RegistryDoc => {
-        written = change(validDoc(remote));
+      // unchanged (304 on lastEtag): memory is that version (plus lazy lastSeen)
+      (remote, unchanged): RegistryDoc => {
+        written = change(unchanged ? devices : validDoc(remote));
         return { version: 1, devices: written };
       },
-      cas,
+      { ...cas, knownEtag: lastEtag },
     );
     load(written);
   }
@@ -138,7 +149,10 @@ export function createDeviceRegistry({
       const hash = hashToken(token);
       if (findHash(hash, envTokens().map(hashToken)) !== -1) return true;
       let d = lookup(hash);
-      if (!d) {
+      const t = now().getTime();
+      // Unknown tokens (bad clients) must not turn into one blob read per request
+      if (!d && t - lastMissReload >= missReloadIntervalMs) {
+        lastMissReload = t;
         await refresh();
         d = lookup(hash);
       }
