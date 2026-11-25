@@ -1,4 +1,5 @@
 import Foundation
+import HealdCore
 import OSLog
 import Security
 
@@ -25,10 +26,12 @@ enum DeviceIdentity {
         return try? JSONDecoder().decode(DeviceRecord.self, from: data)
     }
 
-    /// Create or return existing enrollment.
+    /// Create or return existing enrollment. An existing record from another Mac (cloned ~/.heald)
+    /// is archived and replaced — see `ensureBoundToThisMac()`.
     @discardableResult
     static func enroll(force: Bool = false) throws -> DeviceRecord {
         if !force, let existing = load(), !existing.token.isEmpty {
+            if case .reenrolled(_, _, let rec) = ensureBoundToThisMac() { return rec }
             return existing
         }
 
