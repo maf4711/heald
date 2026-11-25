@@ -1,4 +1,5 @@
 import Foundation
+import HealdCore
 import OSLog
 import Security
 
@@ -25,30 +26,30 @@ enum DeviceIdentity {
         return try? JSONDecoder().decode(DeviceRecord.self, from: data)
     }
 
-    /// Create or return existing enrollment.
+    /// Create or return existing enrollment. Unless `checkBinding` is false, an existing record from
+    /// another Mac (cloned ~/.heald) is archived and replaced — see `ensureBoundToThisMac()`.
     @discardableResult
-    static func enroll(force: Bool = false) throws -> DeviceRecord {
+    static func enroll(force: Bool = false, checkBinding: Bool = true) throws -> DeviceRecord {
         if !force, let existing = load(), !existing.token.isEmpty {
-            return existing
+            if checkBinding, case .reenrolled(_, _, let rec) = ensureBoundToThisMac() { return rec }
+            return load() ?? existing
         }
+        let rec = makeRecord(hardwareUUID: hardwareUUID())
+        try save(rec)
+        Logger.lifecycle.info("Device enrolled id=\(rec.deviceId.prefix(8))…")
+        return rec
+    }
 
-        let hw = hardwareUUID()
-        let serial = serialNumber()
-        let host = Host.current().localizedName ?? ProcessInfo.processInfo.hostName
-        let deviceId = hw ?? UUID().uuidString.lowercased()
-        let token = generateToken()
-
-        let rec = DeviceRecord(
-            deviceId: deviceId,
-            token: token,
-            hostname: host,
+    /// Fresh identity for this Mac. `hw` is passed in so callers that already probed ioreg don't probe again.
+    static func makeRecord(hardwareUUID hw: String?) -> DeviceRecord {
+        DeviceRecord(
+            deviceId: hw ?? UUID().uuidString.lowercased(),
+            token: generateToken(),
+            hostname: Host.current().localizedName ?? ProcessInfo.processInfo.hostName,
             enrolledAt: ISO8601DateFormatter().string(from: Date()),
             hardwareUUID: hw,
-            serialNumber: serial
+            serialNumber: serialNumber()
         )
-        try save(rec)
-        Logger.lifecycle.info("Device enrolled id=\(deviceId.prefix(8))…")
-        return rec
     }
 
     static func save(_ rec: DeviceRecord) throws {
