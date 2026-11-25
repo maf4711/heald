@@ -192,11 +192,11 @@ export function applySnapshot(s: StoreState, data: Partial<StoreSnapshot>) {
 
 export const MAX_PERSIST_ATTEMPTS = 3;
 
-export interface SnapshotIO {
+export interface SnapshotIO<T = StoreSnapshot> {
   /** Current remote snapshot + its ETag, or null when none exists yet. */
-  read(): Promise<{ snapshot: Partial<StoreSnapshot>; etag?: string } | null>;
+  read(): Promise<{ snapshot: T; etag?: string } | null>;
   /** Write; must throw when `etag` no longer matches (optimistic concurrency). */
-  write(snapshot: StoreSnapshot, etag: string | undefined): Promise<void>;
+  write(snapshot: T, etag: string | undefined): Promise<void>;
   isConflict(err: unknown): boolean;
 }
 
