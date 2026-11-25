@@ -1,42 +1,16 @@
 import { NextResponse } from "next/server";
 import { validateApiKey } from "@/lib/auth";
 import { upsertMachine, addEvent, addHeals, addFindings, flush } from "@/lib/store";
-import { ingestBody } from "@/lib/heal-report";
+import { processIngest } from "@/lib/ingest";
 
 // POST /api/ingest — receives metric push from daemon (CLOUD-02)
 // plus heal reports (heald.heal_report/v1) and findings (heald.findings/v1).
+// Status contract (200 = durable, 503 = retry, 4xx = poison) in lib/ingest.ts.
 export async function POST(request: Request) {
-  if (!validateApiKey(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  try {
-    const body = await request.json();
-
-    // Validate heals/findings shape before any write so a 400 stores nothing
-    const result = ingestBody(body);
-    if (result.status === 400) {
-      return NextResponse.json(result.json, { status: 400 });
-    }
-
-    // Buffer every write, then persist once (one blob read-merge-write per request)
-    const deferred = { persist: false };
-    if (body.metrics) {
-      await upsertMachine(body.metrics, deferred);
-    }
-
-    if (body.events && Array.isArray(body.events)) {
-      for (const event of body.events) {
-        await addEvent(event, deferred);
-      }
-    }
-
-    if (result.heals.length) await addHeals(result.heals, deferred);
-    if (result.findings.length) await addFindings(result.findings, deferred);
-    await flush();
-
-    return NextResponse.json(result.json);
-  } catch {
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
-  }
+  const r = await processIngest({
+    authorized: () => validateApiKey(request),
+    body: () => request.json(),
+    store: { upsertMachine, addEvent, addHeals, addFindings, flush },
+  });
+  return NextResponse.json(r.json, { status: r.status, headers: r.headers });
 }

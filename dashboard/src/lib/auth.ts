@@ -3,7 +3,7 @@
 // HEALD_DEVICE_TOKENS — optional bootstrap device tokens
 // Registered devices via POST /api/enroll also validate.
 
-import { isDeviceToken, touchDeviceByToken } from "./devices";
+import { authenticateDevice } from "./devices";
 
 export function extractBearer(request: Request): string | null {
   const authHeader = request.headers.get("authorization");
@@ -11,7 +11,7 @@ export function extractBearer(request: Request): string | null {
   return authHeader.slice(7).trim() || null;
 }
 
-export function validateApiKey(request: Request): boolean {
+export async function validateApiKey(request: Request): Promise<boolean> {
   const key = extractBearer(request);
   if (!key) return false;
 
@@ -22,18 +22,8 @@ export function validateApiKey(request: Request): boolean {
 
   if (validKeys.includes(key)) return true;
 
-  // Per-device tokens (env + registry)
-  if (isDeviceToken(key)) {
-    touchDeviceByToken(key);
-    return true;
-  }
-
-  // Fail-closed if nothing configured
-  if (validKeys.length === 0 && !process.env.HEALD_DEVICE_TOKENS) {
-    // still allow empty registry miss → false
-    return false;
-  }
-  return false;
+  // Per-device tokens (env + durable registry); fail-closed on a miss
+  return authenticateDevice(key);
 }
 
 /** Admin operations (enroll register, list devices) — HEALD_API_KEYS only. */

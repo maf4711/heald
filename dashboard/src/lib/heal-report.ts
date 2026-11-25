@@ -66,6 +66,8 @@ export interface Finding {
   sources?: string[];
   sample?: string;
   detail?: string;
+  /** When the linked heal succeeded (daemon); orders same-observation updates. */
+  healedAt?: string | null;
 }
 
 export type Validation = { ok: true } | { ok: false; reason: string };
@@ -191,6 +193,7 @@ export function validateFinding(v: unknown, now: number = Date.now()): Validatio
     num(v.recurrenceCount, "recurrenceCount"),
     iso(v.firstSeen, "firstSeen", now),
     iso(v.lastSeen, "lastSeen", now, { noFuture: true }),
+    iso(v.healedAt, "healedAt", now, { noFuture: true }),
     str(v.sample, "sample", MAX_SAMPLE_CHARS),
     sourcesCheck(v.sources),
     str(v.detail, "detail", MAX_DETAIL_CHARS),
@@ -210,7 +213,7 @@ const HEAL_KEYS = [
 const ADVISOR_KEYS = ["source", "recommendation", "confidence", "rationale", "latencyMs"] as const;
 const FINDING_KEYS = [
   "schema", "machineId", "fingerprint", "category", "component", "severity", "count", "status",
-  "recurrenceCount", "linkedAction", "firstSeen", "lastSeen", "sources", "sample", "detail",
+  "recurrenceCount", "linkedAction", "firstSeen", "lastSeen", "sources", "sample", "detail", "healedAt",
 ] as const;
 
 /** Copy only known heal fields (call after validateHealReport). */
@@ -243,15 +246,60 @@ export function applyHeals(bucket: readonly HealReport[], incoming: readonly Hea
 
 const findingKey = (f: Pick<Finding, "machineId" | "fingerprint">) => `${f.machineId}\u0000${f.fingerprint}`;
 
+const timeOf = (iso: string | undefined) => {
+  const t = iso ? Date.parse(iso) : NaN;
+  return Number.isFinite(t) ? t : -Infinity;
+};
+
+/** Lifecycle order within one observation: the daemon only moves open|recurring → fixed. */
+const STATUS_RANK: Record<string, number> = { open: 0, recurring: 1, fixed: 2 };
+
+/** Positive when `a` is further along than `b`; NaN-safe (-Infinity for missing times). */
+function cmpTime(a: string | undefined | null, b: string | undefined | null): number {
+  const d = timeOf(a ?? undefined) - timeOf(b ?? undefined);
+  return Number.isNaN(d) ? 0 : d;
+}
+
+/**
+ * Does `candidate` replace `current` (same machine + fingerprint)? Merges
+ * must be order-independent (PR #22 review). A new observation bumps
+ * lastSeen/count (fixed → recurring also bumps recurrenceCount); a heal only
+ * changes linkedAction/healedAt and then status → fixed, with lastSeen and
+ * count unchanged (DiagnosisEngine.recordHeal / refresh / markFixed). So rank:
+ * lastSeen, count, recurrenceCount, status (fixed > recurring > open), newer
+ * healedAt, linkedAction present. Only a full tie (same lifecycle state) goes
+ * to `candidateWinsTie`.
+ */
+function findingWins(candidate: Finding, current: Finding, candidateWinsTie: boolean): boolean {
+  const steps = [
+    cmpTime(candidate.lastSeen, current.lastSeen),
+    (candidate.count ?? 0) - (current.count ?? 0),
+    (candidate.recurrenceCount ?? 0) - (current.recurrenceCount ?? 0),
+    (STATUS_RANK[candidate.status] ?? 0) - (STATUS_RANK[current.status] ?? 0),
+    cmpTime(candidate.healedAt, current.healedAt),
+    Number(!!candidate.linkedAction) - Number(!!current.linkedAction),
+  ];
+  const decisive = steps.find((d) => d !== 0);
+  return decisive === undefined ? candidateWinsTie : decisive > 0;
+}
+
 /**
  * Upsert findings by (machineId, fingerprint); newest lastSeen first; cap
  * MAX_FINDINGS_PER_MACHINE per machine and MAX_FINDINGS_TOTAL overall.
  */
-export function applyFindings(bucket: readonly Finding[], incoming: readonly Finding[]): Finding[] {
+export function applyFindings(
+  bucket: readonly Finding[],
+  incoming: readonly Finding[],
+  { tieKeepsExisting = false } = {},
+): Finding[] {
   // Upsert only: fingerprints missing from a node's newer snapshot are kept, not deleted.
   const byKey = new Map<string, Finding>();
   for (const f of bucket) byKey.set(findingKey(f), f);
-  for (const f of incoming) byKey.set(findingKey(f), f);
+  for (const f of incoming) {
+    const k = findingKey(f);
+    const cur = byKey.get(k);
+    if (!cur || findingWins(f, cur, !tieKeepsExisting)) byKey.set(k, f);
+  }
   const sorted = Array.from(byKey.values()).sort((a, b) => newestFirst(a.lastSeen, b.lastSeen));
   const perMachine = new Map<string, number>();
   const out = sorted.filter((f) => {
@@ -304,7 +352,8 @@ export function mergeHealBuckets(target: HealBuckets, data: unknown, now: number
     : [];
   return {
     heals: heals.length ? applyHeals(target.heals, heals) : target.heals,
-    findings: findings.length ? applyFindings(target.findings, findings) : target.findings,
+    // Persisted data never beats an equally new live record (tie keeps local)
+    findings: findings.length ? applyFindings(target.findings, findings, { tieKeepsExisting: true }) : target.findings,
   };
 }
 

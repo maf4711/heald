@@ -2,6 +2,7 @@
 // retry on ETag precondition failure instead of overwriting it.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { MAX_CAS_ATTEMPTS, PersistError } from "./blob-cas.ts";
 import {
   applySnapshot,
   createState,
@@ -33,6 +34,7 @@ function remoteWith(ids: string[]): StoreSnapshot {
 }
 
 class Conflict extends Error {}
+const noSleep = { sleep: async () => {} };
 
 test("applySnapshot is idempotent for heals/findings/events", () => {
   const s = createState();
@@ -46,14 +48,15 @@ test("F4 mergeAndWrite merges the remote snapshot before writing with its etag",
   const s = createState();
   applySnapshot(s, { heals: [healOf("local")] });
   const writes: { ids: string[]; etag?: string }[] = [];
-  const ok = await mergeAndWrite(s, {
+  const newEtag = await mergeAndWrite(s, {
     read: async () => ({ snapshot: remoteWith(["remote"]), etag: "e1" }),
     write: async (snap, etag) => {
       writes.push({ ids: snap.heals.map((h) => h.id).sort(), etag });
+      return "e2";
     },
     isConflict: (e) => e instanceof Conflict,
   });
-  assert.equal(ok, true);
+  assert.equal(newEtag, "e2");
   assert.deepEqual(writes, [{ ids: ["local", "remote"], etag: "e1" }]);
   assert.deepEqual(s.heals.map((h) => h.id).sort(), ["local", "remote"]);
 });
@@ -63,7 +66,7 @@ test("F4 mergeAndWrite re-reads and retries on precondition failure", async () =
   applySnapshot(s, { heals: [healOf("local")] });
   let reads = 0;
   const etags: (string | undefined)[] = [];
-  const ok = await mergeAndWrite(s, {
+  await mergeAndWrite(s, {
     read: async () => {
       reads++;
       return { snapshot: remoteWith(reads === 1 ? ["r1"] : ["r1", "r2"]), etag: `e${reads}` };
@@ -73,28 +76,29 @@ test("F4 mergeAndWrite re-reads and retries on precondition failure", async () =
       if (etag === "e1") throw new Conflict();
     },
     isConflict: (e) => e instanceof Conflict,
-  });
-  assert.equal(ok, true);
+  }, noSleep);
   assert.deepEqual(etags, ["e1", "e2"]);
   assert.deepEqual(s.heals.map((h) => h.id).sort(), ["local", "r1", "r2"]);
 });
 
-test("F4 mergeAndWrite gives up after 3 conflicting attempts", async () => {
+test("#19 mergeAndWrite throws PersistError after MAX_CAS_ATTEMPTS conflicting attempts", async () => {
   const s = createState();
   let writes = 0;
-  const ok = await mergeAndWrite(s, {
-    read: async () => ({ snapshot: remoteWith([]), etag: "e" }),
-    write: async () => {
-      writes++;
-      throw new Conflict();
-    },
-    isConflict: (e) => e instanceof Conflict,
-  });
-  assert.equal(ok, false);
-  assert.equal(writes, 3);
+  await assert.rejects(
+    mergeAndWrite(s, {
+      read: async () => ({ snapshot: remoteWith([]), etag: "e" }),
+      write: async () => {
+        writes++;
+        throw new Conflict();
+      },
+      isConflict: (e) => e instanceof Conflict,
+    }, noSleep),
+    PersistError,
+  );
+  assert.equal(writes, MAX_CAS_ATTEMPTS);
 });
 
-test("F4 mergeAndWrite writes without etag when no blob exists yet", async () => {
+test("F4 mergeAndWrite writes without etag (create-only) when no blob exists yet", async () => {
   const s = createState();
   const etags: (string | undefined)[] = [];
   await mergeAndWrite(s, {
@@ -110,14 +114,16 @@ test("F4 mergeAndWrite writes without etag when no blob exists yet", async () =>
 test("F4 mergeAndWrite does not retry non-conflict errors", async () => {
   const s = createState();
   let writes = 0;
-  const ok = await mergeAndWrite(s, {
-    read: async () => null,
-    write: async () => {
-      writes++;
-      throw new Error("network");
-    },
-    isConflict: (e) => e instanceof Conflict,
-  });
-  assert.equal(ok, false);
+  await assert.rejects(
+    mergeAndWrite(s, {
+      read: async () => null,
+      write: async () => {
+        writes++;
+        throw new Error("network");
+      },
+      isConflict: (e) => e instanceof Conflict,
+    }),
+    PersistError,
+  );
   assert.equal(writes, 1);
 });
