@@ -12,7 +12,7 @@ struct DoctorCommand: AsyncParsableCommand {
     func run() async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
         let policy = PolicyPack.load()
-        let identity = DeviceIdentity.ensureBoundToThisMac()
+        let identity = DeviceIdentity.identitySummary() // read-only: doctor never relocates/enrolls
         let device = DeviceIdentity.load()
         print("heald doctor v\(HealdApp.version) — Enterprise")
         print(String(repeating: "─", count: 48))
@@ -25,7 +25,7 @@ struct DoctorCommand: AsyncParsableCommand {
         print("SIEM:       \(policy.siemSyslogEnabled || !(ProcessInfo.processInfo.environment["HEALD_SIEM_HOST"] ?? "").isEmpty ? "on" : "off")")
         print("MDM policy: \(PolicyPack.hasManagedPolicy() ? "active (sh.heald overrides)" : "none")")
         print("Device:     \(device.map { $0.deviceId } ?? "not enrolled — heald enroll")")
-        print("identity:   \(identity.summary)")
+        print("identity:   \(identity)")
         print("Auth:       \(DeviceIdentity.bearerToken() != nil ? "token/key present" : "none")")
         print("Sudo ticket:\(SudoTicket.hasTicket() ? "yes" : "no — heald sudo-setup")")
         print("Policy:     \(PolicyPack.policyURL.path)")

@@ -42,10 +42,18 @@ struct EnrollCommand: AsyncParsableCommand {
             }
             return
         }
-        if case .reenrolled(let was, let archive, _) = DeviceIdentity.ensureBoundToThisMac() {
+        let d: DeviceRecord
+        switch DeviceIdentity.ensureBoundToThisMac() {
+        case .reenrolled(let was, let archive, let rec):
+            // Already rotated for this Mac — `--force` must not rotate a second time.
             print("identity: re-enrolled (was \(was)) — cloned ~/.heald archived to \(archive.path)")
+            d = rec
+        case .failed(let why):
+            print("identity: MISMATCH — re-enroll failed (rolled back, device.json kept): \(why)")
+            throw ExitCode(1)
+        default:
+            d = try DeviceIdentity.enroll(force: force, checkBinding: false)
         }
-        let d = try DeviceIdentity.enroll(force: force)
         print("Enrolled heald device")
         print("deviceId:  \(d.deviceId)")
         print("serial:    \(d.serialNumber ?? "—")")
